@@ -6,10 +6,9 @@ This header only library aims to provide fast and efficient software implements 
 # Supported operation
 
 This library provides full support for the following operations via the [Intel Intrinsics](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) `__m128` types:
-- Saturation arithmetic
-- Low, high, and full products of a multiplication
-- Unsigned division (and division-by-a-constant optimization)
-- Unsigned and 64-bit comparisons 
-- Full support for conversion between float and integer types
-- Integer square root
-- And more!
+
+<picture>
+  <img alt="Add operations and their number of instructions" src="external/Instruction matrix minimal.png">
+</picture>
+
+...and more! See the documentation or the instruction matrix for a full list of all added operations.
