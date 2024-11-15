@@ -3,12 +3,32 @@ SIMD on x86 has this bizarre and apparently arbitrary lack of many fundamental o
 
 This header only library aims to provide fast and efficient software implements of these missing operations only using SIMD instructions that are supported on all 64-bit x86 CPUs. This means that project can safely use this library without increasing their minimum hardware requirements well still benefiting from a wealth of SIMD accelerated operations. It may also be useful as a more performant fallback implementation than scalar instructions.
 
-# Supported operation
+# Supported operations
 
 This library provides full support for the following operations via the [Intel Intrinsics](https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html) `__m128` types:
 
 <picture>
-  <img alt="Add operations and their number of instructions" src="external/Instruction matrix minimal.png">
+  <img alt="Table of instructions per operation" src="external/Instruction_matrix_minimal.png">
 </picture>
 
-...and more! See the documentation or the instruction matrix for a full list of all added operations.
+...and more! See the documentation or the [instruction matrix](external/Instruction_matrix_FULL.png) for a full list of all added operations.
+
+# Quick Start
+This is a header only library so all you need to do is place the [sseComplete.h file](include/sseComplete.h) and [sseCom_parts folder](include/sseCom_parts) in your project and then use a `#include "sseComplete.h"` directive in your source file. You can also choose to only include a single header file in the sseCom_parts folder, which will automatically include any additional internal dependencies as well.
+
+Each public function in this library will have the following signature:
+
+`_<str:operation name>_<char:type><int:bit width>x<int:elements>[str:Lo|Hi]`
+
+Examples:
+- `_div_u32x4`: Divide unsigned 32-bit integers
+- `_mulFull_i8x16Hi`: Full multiplication (16-bit product) of the upper signed 8-bit integers
+- `_convert_f32x4_u32x4`: Convert 32-bit floats into unsigned 32-bit integers
+
+
+### Compiler support
+This library should work on all major compilers (clang, GCC, MSVC, ICC). However, because I occasionally needed some platform specific hardware features for the best performance, a handful of operations may not be available on all compilers. In particular, the 64-bit `mulHi` only works on compiler that support the `__int128_t` extension type or MSVC’s intrinsics and the 64-bit integer square root is only available on platforms that implement the GNU extension to C. Unsupported functions are automatically removed by the preprocessor and shouldn’t cause any issues.
+
+
+### Unit and performance testing
+Additionally, this repository [includes unit tests and performance testing](tests) source files. If you wish to use them, you will have to compile them yourself.
