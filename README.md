@@ -34,4 +34,4 @@ This library should work on all major compilers (clang, GCC, MSVC, ICC). However
 Additionally, this repository [includes unit tests and performance testing](tests) source files. If you wish to use them, you will have to compile them yourself.
 
 # Credits
-Division-by-a-constant functions based on method from [arXiv:1902.01961 "*Faster Remainder by Direct Computation…*"](arxiv.org/abs/1902.01961) by Daniel Lemire, Owen Kaser, Nathan Kurz.
+"*Faster Remainder by Direct Computation: Applications to Compilers and Software Libraries*" Daniel Lemire, Owen Kaser, Nathan Kurz [arXiv:1902.01961](arxiv.org/abs/1902.01961)
