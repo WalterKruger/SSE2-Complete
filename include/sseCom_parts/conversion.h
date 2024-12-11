@@ -86,11 +86,23 @@ SSECOM_INLINE __m128i _signExtendHi_i32x4_i64x2(__m128i i32ToConvert) {
 
 // Truncade 32-bit elements to 16-bit, return first argument's elements in low half, the second in high
 SSECOM_INLINE __m128i _trunc_u32x4_u16x8(__m128i u32LoHalf, __m128i u32HiHalf) {
+    // Shuffle method need float instruction
+    #if 0
     // [##, ##, 3Lo, 2Lo, ##, ##, 1Lo, 0Lo]
     __m128i resultLo_inLo64Part = _mm_shufflehi_epi16( _mm_shufflelo_epi16(u32LoHalf, _MM_SHUFFLE(0,0,2,0)), _MM_SHUFFLE(0,0,2,0) );
     __m128i resultHi_inLo64Part = _mm_shufflehi_epi16( _mm_shufflelo_epi16(u32HiHalf, _MM_SHUFFLE(0,0,2,0)), _MM_SHUFFLE(0,0,2,0) );
     
     return _shuffleLoHi_i32x4(resultLo_inLo64Part, _MM_SHUFHALF(2,0), resultHi_inLo64Part, _MM_SHUFHALF(2,0));
+    #else
+    // Since `packs` is to signed, masking away the upper 16 may still cause a saturation
+    // when the 16th bit is set (out of range of signed 16).
+
+    // This allows that case to not saturate as it is interperated as negative
+    __m128i signShift_lo = _mm_srai_epi32( _mm_slli_epi32(u32LoHalf, 16) , 16);
+    __m128i signShift_hi = _mm_srai_epi32( _mm_slli_epi32(u32HiHalf, 16) , 16);
+
+    return _mm_packs_epi32(signShift_lo, signShift_hi);
+    #endif
 }
 
 // Convert unsigned 32-bit integers into 16-bit via unsigned saturation

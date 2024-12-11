@@ -35,3 +35,14 @@ static uint64_t rrmxmx_64(uint64_t x)
     x *= 0x9fb21c651e98df25; x ^= x >> 28;
     return x;
 }
+
+#if 0
+// Credit: Pelle Evensen (http://mostlymangling.blogspot.com/2019/01/better-stronger-mixer-and-test-procedure.html)
+static uint64_t rrxmrrxmsx_0_64(uint64_t x) {
+    x ^= (x<<25 | x>>39) ^ (x<<50 | x>>14);
+    x *= 0xA24BAED4963EE407UL;
+    x ^= (x<<24 | x>>40) ^ (x<<49 | x>>15);
+    x *= 0x9FB21C651E98DF25UL;
+    return x ^ x >> 28;
+}
+#endif

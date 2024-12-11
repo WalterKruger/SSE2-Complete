@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <emmintrin.h> // SSE2
 
-#include "../include/sseComplete.h"
+//#include "../include/sseComplete.h"
 #include "_perfCommon.h"
 
 // ===== Float32 to unsigned int 32 =====
@@ -59,9 +59,59 @@ NOINLINE __m128i scale_f32ToU64(__m128 f32_toCvt) {
 
     // Scaling "removed" the MSB, so re-add it
     // "Align" lower two masks with the converted upper [mask1, mask1, mask0, mask0]
-    __m128i maskAligned = _mm_shuffle_epi32( _mm_castps_si128(willOverflowMask), 0b10100000);
+    __m128i maskAligned = _mm_shuffle_epi32( _mm_castps_si128(willOverflowMask), _MM_SHUFFLE(1,1,0,0));
     return _mm_xor_si128(scaledCvt, _mm_slli_epi64( maskAligned, 63 ));
 }
+
+NOINLINE __m128i scaleBranch_f32ToU64(__m128 f32_toCvt) {
+    const __m128 OVERFLOW_THRESHOLD = _mm_set_ss(1ull << 63);
+
+    __m128 f32_lo = f32_toCvt; // Already in lowest element
+    __m128 f32_hi = _mm_castsi128_ps( _mm_shuffle_epi32(_mm_castps_si128(f32_toCvt), _MM_SHUFFLE(1,1,1,1)) );
+
+    // Only have float => signed 64, so if float would be too large to fit in signed,
+    // its "MSB" is removed as a float and then restored as a int
+    int64_t cvted_lo = (_mm_comilt_ss(f32_lo, OVERFLOW_THRESHOLD))
+        ? _mm_cvttss_si64(f32_lo)
+        : _mm_cvttss_si64(_mm_sub_ss(f32_lo, OVERFLOW_THRESHOLD)) | INT64_MIN;
+
+
+    //__m128 f32_hi = _mm_shuffle_ps(f32_toCvt, f32_toCvt, _MM_SHUFFLE(1,1,1,1));
+
+    int64_t cvted_hi = (_mm_comilt_ss(f32_hi, OVERFLOW_THRESHOLD))
+        ? _mm_cvttss_si64(f32_hi)
+        : _mm_cvttss_si64(_mm_sub_ss(f32_hi, OVERFLOW_THRESHOLD)) | INT64_MIN;
+
+
+    return _mm_unpacklo_epi64(_mm_cvtsi64_si128(cvted_lo), _mm_cvtsi64_si128(cvted_hi));
+}
+
+NOINLINE __m128i scaleBranchA_f32ToU64(__m128 f32_toCvt) {
+    const __m128 OVERFLOW_THRESHOLD = _mm_set_ss(1ull << 63);
+
+    __m128 f32_lo = f32_toCvt; // Already in lowest element
+    __m128 f32_hi = _mm_castsi128_ps( _mm_shuffle_epi32(_mm_castps_si128(f32_toCvt), _MM_SHUFFLE(1,1,1,1)) );
+
+    if (_mm_comilt_ss(f32_lo, OVERFLOW_THRESHOLD)) {
+        if (_mm_comilt_ss(f32_hi, OVERFLOW_THRESHOLD)) {
+            int64_t cvted_lo = _mm_cvttss_si64(f32_lo);
+            int64_t cvted_hi = _mm_cvttss_si64(f32_hi);
+
+            return _mm_unpacklo_epi64(_mm_cvtsi64_si128(cvted_lo), _mm_cvtsi64_si128(cvted_hi));
+        }
+
+        int64_t cvted_lo = _mm_cvttss_si64(f32_lo);
+        int64_t cvted_hi = _mm_cvttss_si64(_mm_sub_ss(f32_hi, OVERFLOW_THRESHOLD)) | INT64_MIN;
+
+        return _mm_unpacklo_epi64(_mm_cvtsi64_si128(cvted_lo), _mm_cvtsi64_si128(cvted_hi));
+    }
+
+    int64_t cvted_lo = _mm_cvttss_si64(_mm_sub_ss(f32_lo, OVERFLOW_THRESHOLD)) | INT64_MIN;
+    int64_t cvted_hi = _mm_cvttss_si64(_mm_sub_ss(f32_hi, OVERFLOW_THRESHOLD)) | INT64_MIN;
+
+    return _mm_unpacklo_epi64(_mm_cvtsi64_si128(cvted_lo), _mm_cvtsi64_si128(cvted_hi));
+}
+
 
 NOINLINE __m128i compiler_f32ToU64(__m128 f32_toCvt) {
     float f32_array[4];

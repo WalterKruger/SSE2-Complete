@@ -63,46 +63,82 @@ __m128i _sqrt_u32x4(__m128i u32_radicand) {
     return _mm_unpacklo_epi32(sqrt_lo, sqrt_hi);
 }
 
-// Need inline asm because we want to use the x87's extended-precision square root.
-// However even with 80-bit support via long double, compilers tend to produce very inefficient code 
-// (like changing the round mode back and forth, or unnecessary isNegative checks)
-// For compilers that doesn't support GGC style inline asm, you could try using an external .asm file
-#if defined(__GNUC__) && (LDBL_MANT_DIG == 64) // Mantissa check ensures FPU in extended precision mode
 
 // Calculates `⌊√n⌋` of every unsigned 64-bit integer
 __m128i _sqrt_u64x2(__m128i u64_radicand) {
-    // Use the FPU as it uses a 80-bit float capable of representing all 
-    // 64-bit integers exactly and has hardware support for square root
-    static const double NEG_ONE = -1.0;
+    // Need inline asm because we want to use the x87's extended-precision square root.
+    // However even with 80-bit support via long double, compilers tend to produce very inefficient code 
+    // (like changing the round mode back and forth, or unnecessary isNegative checks)
+    // For compilers that doesn't support GGC style inline asm, you could try using an external .asm file
+    #if LDBL_MANT_DIG == 64
 
     uint64_t u64_array[2], sqrts[2];
     _mm_storeu_si128((__m128i*)u64_array, u64_radicand);
 
-    for (size_t i=0; i < 2; i++) {
+    // Break into two loops to allow for better instruction scheduling
+    double sqrt_dbl[2];
+    for (size_t i=0; i<2; i++) {
+        // GCC checks for negative inputs with `sqrtl`???
+        #ifdef __GNUC__
         __asm__(".att_syntax\n\t"
-        // Calculate double extended-precision square root
-            "fsqrt                  ;"
-        // Round to int to check rounding mode
-            "fst     %%st(1)        ;"
-            "frndint                ;"
-        // if (rounded up) {  result -= 1.0  }  [Round down instead]
-            "fcomi   %%st(1), %%st  ;"
-            "jbe     .keepRounding_sqrtu64_%=;"
-            "faddl   %[NEG_ONE]     ;"
-        ".keepRounding_sqrtu64_%=:  ;"
-        // Store as int and clear stack
-            "fistpll %[result]  ;"
-            "fstp    %%st       ;"
-        : [result] "=m" (sqrts[i])
-        : "t" ((long double)u64_array[i]), [NEG_ONE] "m" (NEG_ONE)
-        : "st", "st(1)"
+            "fsqrt          ;"
+            "fstpl   %0     ;"
+        : "=m" (sqrt_dbl[i])  : "t" ((long double)u64_array[i]) : "st"
         );
+        #else
+        sqrt_dbl[i] = (double)sqrtl( (long double)u64_array[i] );
+        #endif
     }
 
+    for (size_t i=0; i<2; i++) {
+        // Convert to double first as it has truncation convertion to integer
+        // (Direct conversion needs to account for case where it rounds up above UINT32_MAX)
+        uint64_t sqrt_u64 = (int64_t)sqrt_dbl[i]; // Sign doesn't matter (sqrt(u64) => u32)
+
+        // However, if f80 => f64 conversion rounds up to the next integer,
+        // the truncation won't help, so check for that case
+        sqrts[i] = sqrt_u64 - (sqrt_u64 * sqrt_u64 > u64_array[i]);
+    } 
+    
     return _mm_loadu_si128((__m128i*)sqrts);
+
+    // This is actually a bit faster on newer CPUs (Zen3 & Cannon Lake/Goldmount plus)
+    // due to fast 64-bit division
+    #else
+
+    // A double can represent most 64-bit ints and has hardware support for SIMD sqrt
+    // Then use a single iteration of newton's method to get exact result
+    // Newton's method: x{n+1} = 0.5 * (x{n} + S / x{n})
+
+    // Let approximation x{n} = sqrt((double)S)
+    __m128d guess_dbl = _mm_sqrt_pd( _convert_u64x2_f64x2(u64_radicand) );
+
+    // Both `div_u64` & `convert_f64x2_u64x2` extract from vec and act one-by-one
+    // so doing their operations manually avoids redundent extract+repack
+
+    uint64_t input_lo = _mm_cvtsi128_si64(u64_radicand);
+    uint64_t input_hi = _mm_cvtsi128_si64(_mm_unpackhi_epi64(u64_radicand, u64_radicand));
+
+    // Convert from double => "uint64_t" (The instruction being signed doesn't)
+    uint64_t guess_int_lo = _mm_cvtsd_si64(guess_dbl);
+    uint64_t guess_int_hi = _mm_cvtsd_si64(_mm_unpackhi_pd(guess_dbl, guess_dbl));
+
+    // S / x{n}
+    uint64_t quot_lo = input_lo / (guess_int_lo + (guess_int_lo == 0)); // Prevents div by zero
+    uint64_t quot_hi = input_hi / (guess_int_hi + (guess_int_hi == 0));
+
+    __m128i guess_vec = _mm_unpacklo_epi64(
+        _mm_cvtsi64_si128(guess_int_lo), _mm_cvtsi64_si128(guess_int_hi)
+    );
+
+    __m128i quot_vec = _mm_unpacklo_epi64(_mm_cvtsi64_si128(quot_lo), _mm_cvtsi64_si128(quot_hi));
+
+    // x{n+1} = (x{n} + QUOTENT) / 2
+    return _mm_srli_epi64( _mm_add_epi64(guess_vec, quot_vec), 1 );
+    #endif
 }
 
-#endif
+
 
 
 // ======================

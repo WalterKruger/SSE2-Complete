@@ -59,7 +59,7 @@ __m128i _mulLo_u8x16(__m128i termA, __m128i termB) {
     __m128i res_even = _mm_andnot_si128(HIGH8_MASK, _mm_mullo_epi16(termA, termB));
 
     // ...0    a6 | 0    a4 | 0    a2
-    // ...b6    0 | b4    0 | b2    0
+    // ...b6    0 | b4    0 | b2    0   [I.E. Products will be placed in high 8]
     __m128i res_odd = _mm_mullo_epi16(_mm_srli_epi16(termA, 8), _mm_and_si128(HIGH8_MASK, termB));
 
     // [...    0    | a3 * b3 |    0    | a1 * b1]
@@ -89,21 +89,36 @@ __m128i _mulLo_i8x16(__m128i termA, __m128i termB) {
 
 // Multiply all unsigned 8-bit elements and return the upper 8-bit of the intermediate 16-bit result 
 __m128i _mulHi_u8x16(__m128i termA, __m128i termB) {
-    const __m128i LOW8_MASK = _mm_set1_epi16(UINT8_MAX);
+    const __m128i LOW8_MASK = _mm_set1_epi16(0x00FF);
 
-    // mulhi_u16((a << 8), b) = (a * b) >> 8
-    // [..., 0, HI(a3 * b3), 0, HI(a1 * b1)]
-    __m128i res_even = _mm_mulhi_epu16(_mm_slli_epi16(termA, 8), _mm_and_si128(termB, LOW8_MASK));
+    // [a1, 0] * [0, b1] => [0, HI(a1, b1) | LO(a1, b1), 0]
+    __m128i res_even = _mm_mulhi_epu16(_mm_slli_epi16(termA, 8), _mm_and_si128(LOW8_MASK, termB));
 
-    // [..., HI(a4 * b4), LO(a4 * b4), HI(a2 * b2), LO(a2 * b2)]
-    __m128i res_odd = _mm_mullo_epi16(_mm_and_si128(termA, LOW8_MASK), _mm_and_si128(termB, LOW8_MASK));
+    // [0, a2] * [0, b2] => [0, 0 | HI(a2, b2), LO(a2, b2)]
+    __m128i res_odd = _mm_mullo_epi16(_mm_srli_epi16(termA, 8), _mm_srli_epi16(termB, 8));
 
     // [...     0      | HI(a3, b3) |     0      | HI(a1, b1) ]
-    // [... HI(a4, b4) | LO(a4, b4) | HI(a1, b2) | LO(a2, b2) ]
+    // [... HI(a4, b4) | LO(a4, b4) | HI(a2, b2) | LO(a2, b2) ]
     __m128i result_full = _mm_or_si128(res_even, _mm_andnot_si128(LOW8_MASK, res_odd));
 
     return result_full;
 }
+
+/*
+__m128i _mulHiA_u8x16(__m128i termA, __m128i termB) {
+    __m128i a_zeroPad_lo = _mm_unpacklo_epi8(_mm_setzero_si128(), termA);
+    __m128i a_zeroPad_hi = _mm_unpackhi_epi8(_mm_setzero_si128(), termA);
+
+    __m128i b_zeroExtend_lo = _zeroExtendLo_u8x16_i16x8(termB);
+    __m128i b_zeroExtend_hi = _zeroExtendHi_u8x16_i16x8(termB);
+
+    // [a1, 0] * [0, b1] = [0, HI(a1 * b1) | LO(a1 * b1), 0]
+    __m128i result_lo = _mm_mulhi_epu16(a_zeroPad_lo, b_zeroExtend_lo);
+    __m128i result_hi = _mm_mulhi_epu16(a_zeroPad_hi, b_zeroExtend_hi);
+
+    return _mm_packus_epi16(result_lo, result_hi);
+}
+*/
 
 // Multiply all signed 8-bit elements and return the upper 8-bit of the intermediate 16-bit result 
 __m128i _mulHi_i8x16(__m128i termA, __m128i termB) {

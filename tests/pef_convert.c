@@ -83,10 +83,9 @@ NOINLINE void _perfMessure_dblInt_fun(__m128i (*funToMessure)(__m128d), size_t i
 int main() {
 
     // Comment the ones out that you don't want to messure
-    #define PERF_INT_TO_FLOAT
-    #define PERF_INT_TO_DOUBLE
-    #define PERF_INT64_TO_FLOAT
-    #define PERF_INT64_TO_DOUBLE
+    #define PERF_INT32_TO_FLOAT
+    #define PERF_SIGNED64_TO_FLOAT
+    #define PERF_UNSIGNED64_TO_FLOAT
     #define PERF_FLOAT_TO_INT
     #define PERF_DOUBLE_TO_INT
 
@@ -125,7 +124,7 @@ int main() {
 
     const size_t iterations = 1000000000ull;
 
-    #ifdef PERF_INT_TO_FLOAT
+    #ifdef PERF_INT32_TO_FLOAT
 
     printf("\nUnsigned 32-bit to float32: Time taken to calculate %llu results...\n", iterations);
     perfMessure_intFlt(magicExpo_u32ToF32, iterations, rand_ints);
@@ -134,9 +133,6 @@ int main() {
     perfMessure_intFlt(halfElementA_u32ToF32, iterations, rand_ints);
     perfMessure_intFlt(compiler_u32ToF32, iterations, rand_ints);
 
-    #endif
-    #ifdef PERF_INT_TO_DOUBLE
-
     printf("\nUnsigned 32-bit to float64: Time taken to calculate %llu results...\n", iterations);
     perfMessure_intDbl(correctAfterCvt_u32ToF64, iterations, rand_ints);
     perfMessure_intDbl(mantissaDepo_u32ToF64, iterations, rand_ints);
@@ -144,27 +140,27 @@ int main() {
     perfMessure_intDbl(compiler_u32ToF64, iterations, rand_ints);
 
     #endif
-    #ifdef PERF_INT64_TO_FLOAT
+    #ifdef PERF_SIGNED64_TO_FLOAT
 
     printf("\nSigned 64-bit to float32: Time taken to calculate %llu results...\n", iterations);
     perfMessure_intFlt(scalarInstruction_i64ToF32, iterations, rand_ints);
     perfMessure_intFlt(compiler_i64ToF32, iterations, rand_ints);
 
+    printf("\nSigned 64-bit to float64: Time taken to calculate %llu results...\n", iterations);
+    perfMessure_intDbl(scalarInstruction_i64ToF64, iterations, rand_ints);
+    perfMessure_intDbl(compiler_i64ToF64, iterations, rand_ints);
+
+    #endif
+    #ifdef PERF_UNSIGNED64_TO_FLOAT
+
     printf("\nUnsigned 64-bit to float32: Time taken to calculate %llu results...\n", iterations);
     perfMessure_intFlt(scaleBranchless_u64ToF32, iterations, rand_ints);
     perfMessure_intFlt(scaleLin_u64ToF32, iterations, rand_ints);
     perfMessure_intFlt(compiler_u64ToF32, iterations, rand_ints);
-
-    #endif
-    #ifdef PERF_INT64_TO_DOUBLE
     
     printf("\nUnsigned 64-bit to float64: Time taken to calculate %llu results...\n", iterations);
     perfMessure_intDbl(magicExpo_u64ToF64, iterations, rand_ints);
     perfMessure_intDbl(compiler_u64ToF64, iterations, rand_ints);
-
-    printf("\nSigned 64-bit to float64: Time taken to calculate %llu results...\n", iterations);
-    perfMessure_intDbl(scalarInstruction_i64ToF64, iterations, rand_ints);
-    perfMessure_intDbl(compiler_i64ToF64, iterations, rand_ints);
 
     #endif
     #ifdef PERF_FLOAT_TO_INT
@@ -179,6 +175,8 @@ int main() {
 
     printf("\nFloat-32 to unsigned int64: Time taken to calculate %llu results...\n", iterations);
     perfMessure_fltInt(scale_f32ToU64, iterations, rand_flt_range64);
+    perfMessure_fltInt(scaleBranch_f32ToU64, iterations, rand_flt_range64);
+    //perfMessure_fltInt(scaleBranchA_f32ToU64, iterations, rand_flt_range64);
     perfMessure_fltInt(compiler_f32ToU64, iterations, rand_flt_range64);
 
     #endif
@@ -201,5 +199,5 @@ int main() {
     
     #endif
 
-    
+    //char dummy; printf("\nEnd of test..."); scanf("\n%c", &dummy);
 }
