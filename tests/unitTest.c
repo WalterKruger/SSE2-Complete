@@ -87,9 +87,9 @@ int64_t satSub_i64(int64_t x, int64_t y) {
 
 #define ELEMENT_SIZE 32
 #define SIGNED 0
-#define CONST_ARG 10000
-#define SCALAR_OP(x) sqrt(x)
-#define VECTOR_OP(x) _sqrt_u32x4(x)
+#define CONST_ARG 1
+#define SCALAR_OP(x) x / CONST_ARG
+#define VECTOR_OP(x) _div_u32x4(x, _mm_set1_epi32(CONST_ARG))
 
 //#define RES_TYPE int16_t              // Only uncomment if result type is diffrent from input
 #define RES_VEC __m128i

@@ -352,14 +352,30 @@ NOINLINE __m128i vecDiv_u32(__m128i numerator, __m128i denominator) {
     __m128d quot_lo_flt = _mm_div_pd(nume_lo_flt, denom_lo_flt);
     __m128d quot_hi_flt = _mm_div_pd(nume_hi_flt, denom_hi_flt);
 
-    // TODO: Since only need unsigned when (numerator > INT32_MAX) and (divisor == 1)
-    //       It might be possible to simplify...
+    #if 0
+    // Full range method (slower, but no overflow)
     __m128i quot_lo_int = _convert_f64x2_u32x4(quot_lo_flt);
     __m128i quot_hi_int = _convert_f64x2_u32x4(quot_hi_flt);
 
-    // Each quotent vec is: [0, 0, quot1, quot0]
     return _mm_unpacklo_epi64(quot_lo_int, quot_hi_int);
+    #else
+
+    // This conversion may overflow
+    __m128i quot_lo_int = _mm_cvttpd_epi32(quot_lo_flt);
+    __m128i quot_hi_int = _mm_cvttpd_epi32(quot_hi_flt);
+    __m128i quotentMayOverflow = _mm_unpacklo_epi64(quot_lo_int, quot_hi_int);
+
+    // Range: [0, INT32_MAX] (MSB=0), all larger values overflow to "80000000H" (MSB=1)
+    __m128i numeIfOverflow = _mm_and_si128(numerator, _mm_srai_epi32(quotentMayOverflow, 31));
+
+    // Overflow when: [n/1, n>INT32_MAX], so `n` is unchanged and has its MSB set
+    return _mm_or_si128(quotentMayOverflow, numeIfOverflow);
+    
+    #endif
 }
+
+
+
 
 // Branchless long division
 NOINLINE __m128i longDiv_u32(__m128i numerator, __m128i denominator) {

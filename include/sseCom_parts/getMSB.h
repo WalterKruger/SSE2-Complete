@@ -18,8 +18,7 @@ SSECOM_INLINE int _getMsb_i16x8(__m128i a) {
     // Negative: INT8_MIN (0b10000000)   Positive: INT8_MAX (0b01111111)
     __m128i duplicatedTrunc = _mm_packs_epi16(a, a);
 
-    // Uses less registers than truncating with a zero vector
-    return _mm_movemask_epi8(duplicatedTrunc) >> 8;
+    return (uint8_t)_mm_movemask_epi8(duplicatedTrunc);
 }
 
 // Gets the most significant bit of each 32-bit integer element as a scalar bit array

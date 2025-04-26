@@ -27,7 +27,7 @@ Examples:
 
 
 ### Compiler support
-This library should work on all major compilers (clang, GCC, MSVC, ICC). However, because I occasionally needed some platform specific hardware features for the best performance, a handful of operations may not be available on all compilers. In particular, the 64-bit `mulHi` only works on compiler that support the `__int128_t` extension type or MSVC’s intrinsics and the 64-bit integer square root is only available on platforms that implement the GNU extension to C. Unsupported functions are automatically removed by the preprocessor and shouldn’t cause any issues.
+This library should work on all major compilers (clang, GCC, MSVC, ICC). However, because I occasionally needed some platform specific hardware features for the best performance, a handful of operations may not be available on all compilers. In particular, the 64-bit `mulHi` only works on compiler that support the `__int128_t` extension type or MSVC’s intrinsics. Unsupported functions are automatically removed by the preprocessor and shouldn’t cause any issues.
 
 
 ### Unit and performance testing
