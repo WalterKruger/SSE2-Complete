@@ -1,5 +1,5 @@
 #ifndef SSE_COM_H
-#define SSE_COM_H 10200
+#define SSE_COM_H 10300
 
 
 #include "sseCom_parts/_common.h"
@@ -11,7 +11,8 @@
 #include "sseCom_parts/getMSB.h"
 #include "sseCom_parts/multiply.h"
 #include "sseCom_parts/negation.h"
-#include "sseCom_parts/shiftShuffle.h"
+#include "sseCom_parts/shift.h"
+#include "sseCom_parts/shuffle.h"
 
 
 #endif

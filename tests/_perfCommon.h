@@ -1,19 +1,26 @@
 #pragma once
 
 #include <stdint.h>
-
+#include <string.h> // memcpy (type generic load/copy)
+#include <time.h>   // Messuring clock cycles
 
 #define MAYBE_VOLATILE
+#define _GNUC_ONLY(x)   // Nothing
 
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_LLVM_COMPILER)
+    #define GNUC_EXTENTION
     #define NOINLINE __attribute__((noinline))
     #define UNUSED __attribute__((unused))
+    #undef _GNUC_ONLY
+    #define _GNUC_ONLY(x) x
 #elif defined(_MSC_VER)
     #define UNUSED
     #define NOINLINE __declspec(noinline)
+    #define _GNUC_ONLY(x) 
 #else
     #define NOINLINE
     #define UNUSED
+    #define _GNUC_ONLY(x)
     // If we can't inline, prevent the result variable from being optimized away
     #undef MAYBE_VOLATILE
     #define MAYBE_VOLATILE volatile
@@ -46,3 +53,33 @@ static uint64_t rrxmrrxmsx_0_64(uint64_t x) {
     return x ^ x >> 28;
 }
 #endif
+
+
+
+
+
+// Function generator for messuring multiple single argument functions with diffrent argument/return types
+#define GEN_PERF_SINGLE_ARG(returnType, funcName, inputType, scalarResType, scalarInpType, rndValSize, resFormatSpecifyStr) \
+NOINLINE void _perfMessure_ ## funcName ## _func(                            \
+    returnType (*funcToMessure)(inputType), size_t iterations, char* funcAsStr, scalarInpType* randVals\
+){\
+    const union {__m128i intDefault; returnType ret; inputType inp;} zeroVal = {_mm_setzero_si128()};\
+    \
+    MAYBE_VOLATILE returnType result = zeroVal.ret;                         \
+    \
+    clock_t start_time = clock();                                           \
+    \
+    for (size_t i=0; i < iterations; i++) {                                 \
+        inputType toCvt = zeroVal.inp;                                      \
+        memcpy(&toCvt, &randVals[i % (rndValSize)], sizeof(inputType));     \
+        \
+        result = funcToMessure(toCvt);                                      \
+    }                                                                       \
+    clock_t end_time = clock();                                             \
+    \
+    scalarResType scalarRes = (scalarResType)0;                             \
+    memcpy(&scalarRes, &result, sizeof(scalarRes));                         \
+    printf(resFormatSpecifyStr"\t %-25s: %.2f seconds\n", scalarRes, funcAsStr, (float)(end_time-start_time) / CLOCKS_PER_SEC);\
+}
+
+

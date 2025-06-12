@@ -1,7 +1,7 @@
 #pragma once
 
 #include "_common.h"
-#include "shiftShuffle.h"
+#include "shuffle.h"
 #include <float.h>
 
 // ======================

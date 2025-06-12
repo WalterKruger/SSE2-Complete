@@ -2,9 +2,19 @@
 
 #include <emmintrin.h> // SSE2
 #include <stdint.h>
-//#include <limits.h>
+#include <limits.h>
 
 #define SSECOM_INLINE static inline
+
+// Compilers that support the GNU C extention are suppose to defined `__GNUC__`
+// However, some platforms (like Visual Studio) undefined them even when using a supported compiler
+#if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_LLVM_COMPILER) || defined(__INTEL_COMPILER)
+    #define SSECOM_GNUC_EXTENTION
+    #define SSECOM_FORCE_ORDER __asm__("")
+#else
+    #define SSECOM_FORCE_ORDER  // Nothing
+#endif
+
 
 // Get a integer vector with all bits set (very cheap!)
 SSECOM_INLINE __m128i _setone_i128() {
@@ -30,6 +40,12 @@ SSECOM_INLINE __m128d _either_f64x2(__m128d a, __m128d b, __m128d mask) {
     __m128d aToKeep = _mm_and_pd(a, mask);
     __m128d bToKeep = _mm_andnot_pd(mask, b);
     return _mm_or_pd(aToKeep, bToKeep);
+}
+
+
+// Fills all 8-bit elements with its MSB
+SSECOM_INLINE __m128i _fillWithMSB_i8x16(__m128i input) {
+    return _mm_cmplt_epi8(input, _mm_setzero_si128());
 }
 
 // Fills all bits in both 64-bit elements with its MSB

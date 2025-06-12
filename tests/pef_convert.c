@@ -3,7 +3,6 @@
 #include <float.h>
 #include <emmintrin.h> // SSE2
 #include "_perfCommon.h"
-#include <time.h>      // Messuring clock cycles
 
 #include "cvt_IntToFlt_Methods.h"
 #include "cvt_FltToInt_Methods.h"
@@ -11,73 +10,17 @@
 
 #define SAMPLES (1<<13) // ~8k
 
-NOINLINE void _perfMessure_intFlt_fun(__m128 (*funToMessure)(__m128i), size_t iterations, char* funAsStr, uint64_t* rand_ints) {
-    MAYBE_VOLATILE __m128 result = _mm_setzero_ps();
-    clock_t start_time = clock(); 
 
-    for (size_t i=0; i < iterations; i++) {
-        __m128i toCvt = _mm_loadu_si128( (__m128i*)&rand_ints[i % SAMPLES]);
-
-        result = funToMessure(toCvt);
-    }
-
-    clock_t end_time = clock();
-    printf("%.2f\t %-25s: %.2f seconds\n", _mm_cvtss_f32(result), funAsStr, (float)(end_time-start_time) / CLOCKS_PER_SEC);
-}
-
-
-NOINLINE void _perfMessure_intDbl_fun(__m128d (*funToMessure)(__m128i), size_t iterations, char* funAsStr, uint64_t* rand_ints) {
-    MAYBE_VOLATILE __m128d result = _mm_setzero_pd();
-    clock_t start_time = clock(); 
-
-    for (size_t i=0; i < iterations; i++) {
-        __m128i toCvt = _mm_loadu_si128( (__m128i*)&rand_ints[i % SAMPLES]);
-
-        result = funToMessure(toCvt);
-    }
-
-    clock_t end_time = clock();
-    printf("%.2lf\t %-25s: %.2f seconds\n", _mm_cvtsd_f64(result), funAsStr, (float)(end_time-start_time) / CLOCKS_PER_SEC);
-}
-
-
-NOINLINE void _perfMessure_fltInt_fun(__m128i (*funToMessure)(__m128), size_t iterations, char* funAsStr, float* rand_floats) {
-    MAYBE_VOLATILE __m128i result = _mm_setzero_si128();
-    clock_t start_time = clock(); 
-
-    for (size_t i=0; i < iterations; i++) {
-        __m128 toCvt = _mm_loadu_ps(&rand_floats[i % SAMPLES]);
-
-        result = funToMessure(toCvt);
-    }
-
-    clock_t end_time = clock();
-    printf("%llu\t %-25s: %.2f seconds\n", _mm_cvtsi128_si64(result), funAsStr, (float)(end_time-start_time) / CLOCKS_PER_SEC);
-}
-
-
-NOINLINE void _perfMessure_dblInt_fun(__m128i (*funToMessure)(__m128d), size_t iterations, char* funAsStr, double* rand_doubles) {
-    MAYBE_VOLATILE __m128i result = _mm_setzero_si128();
-    clock_t start_time = clock(); 
-
-    for (size_t i=0; i < iterations; i++) {
-        __m128d toCvt = _mm_loadu_pd(&rand_doubles[i % SAMPLES]);
-
-        result = funToMessure(toCvt);
-    }
-
-    clock_t end_time = clock();
-    printf("%llu\t %-25s: %.2f seconds\n", _mm_cvtsi128_si64(result), funAsStr, (float)(end_time-start_time) / CLOCKS_PER_SEC);
-}
-
-
-
+GEN_PERF_SINGLE_ARG(__m128, intFlt, __m128i, float, uint64_t, SAMPLES, "%.2f")
+GEN_PERF_SINGLE_ARG(__m128d, intDbl, __m128i, double, uint64_t, SAMPLES, "%.2lf")
+GEN_PERF_SINGLE_ARG(__m128i, fltInt, __m128, uint64_t, float, SAMPLES, "%llu")
+GEN_PERF_SINGLE_ARG(__m128i, dblInt, __m128d, uint64_t, double, SAMPLES, "%llu")
 
 // Don't need to manually enter the function's name
-#define perfMessure_intFlt(funToMessure, iterations, rand_ints)     _perfMessure_intFlt_fun(funToMessure, iterations, #funToMessure, rand_ints)
-#define perfMessure_intDbl(funToMessure, iterations, rand_ints)     _perfMessure_intDbl_fun(funToMessure, iterations, #funToMessure, rand_ints)
-#define perfMessure_fltInt(funToMessure, iterations, rand_floats)   _perfMessure_fltInt_fun(funToMessure, iterations, #funToMessure, rand_floats)
-#define perfMessure_dblInt(funToMessure, iterations, rand_doubles)  _perfMessure_dblInt_fun(funToMessure, iterations, #funToMessure, rand_doubles)
+#define perfMessure_intFlt(funToMessure, iterations, rand_ints)     _perfMessure_intFlt_func(funToMessure, iterations, #funToMessure, rand_ints)
+#define perfMessure_intDbl(funToMessure, iterations, rand_ints)     _perfMessure_intDbl_func(funToMessure, iterations, #funToMessure, rand_ints)
+#define perfMessure_fltInt(funToMessure, iterations, rand_floats)   _perfMessure_fltInt_func(funToMessure, iterations, #funToMessure, rand_floats)
+#define perfMessure_dblInt(funToMessure, iterations, rand_doubles)  _perfMessure_dblInt_func(funToMessure, iterations, #funToMessure, rand_doubles)
 
 
 int main() {
@@ -199,5 +142,5 @@ int main() {
     
     #endif
 
-    //char dummy; printf("\nEnd of test..."); scanf("\n%c", &dummy);
+    char dummy; printf("\nEnd of test..."); scanf("\n%c", &dummy);
 }
