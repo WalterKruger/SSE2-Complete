@@ -8,8 +8,6 @@
 
 #define SAMPLES (1<<13) // ~8k
 
-
-
 NOINLINE void _perfMessure_fun(__m128i (*funToMessure)(__m128i, __m128i), size_t iterations, char* funAsStr, uint64_t* rand_ints) {
     MAYBE_VOLATILE uint64_t result = 0;
     clock_t start_time = clock(); 
@@ -27,7 +25,6 @@ NOINLINE void _perfMessure_fun(__m128i (*funToMessure)(__m128i, __m128i), size_t
 
 // Don't need to manually enter the function's name
 #define perfMessure(funToMessure, iterations, rand_ints) _perfMessure_fun(funToMessure, iterations, #funToMessure, rand_ints)
-
 
 
 int main() {
@@ -50,7 +47,7 @@ int main() {
     
     #ifdef PERF_u8
 
-    printf("\nShuffle 8-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nShuffle 8-bit: Time taken to calculate %zu results...\n", iterations);
     perfMessure(SSSE3_u8, iterations, rand_ints);
     perfMessure(scalarForce_u8, iterations, rand_ints);
     perfMessure(shiftUnroll_u8, iterations, rand_ints);
@@ -61,24 +58,26 @@ int main() {
     #ifdef __GNUC__
     perfMessure(gccAutoVec_u8, iterations, rand_ints);
     #endif
+    perfMessure(viaXor_u8, iterations, rand_ints);
 
     #endif
     #ifdef PERF_u16
 
-    iterations = 400000000ull;
+    iterations = 400000000ull; // 400000000ull
 
-    printf("\nShuffle 16-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nShuffle 16-bit: Time taken to calculate %zu results...\n", iterations);
     perfMessure(memLoop_u16, iterations, rand_ints);
-    perfMessure(switch_u16, iterations, rand_ints);
+    //perfMessure(switch_u16, iterations, rand_ints);
     perfMessure(insertExtractMem_u16, iterations, rand_ints);
     perfMessure(clang_u16, iterations, rand_ints);
+    perfMessure(viaXor_u16, iterations, rand_ints);
 
     #endif
     #ifdef PERF_u32
 
-    iterations = 800000000ull;
+    iterations = 800000000ull; // 800000000ull
 
-    printf("\nShuffle 32-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nShuffle 32-bit: Time taken to calculate %zu results...\n", iterations);
     perfMessure(scalar_u32, iterations, rand_ints);
     perfMessure(shiftSIMD_u32, iterations, rand_ints);
     perfMessure(gcc_u32, iterations, rand_ints);
@@ -88,19 +87,22 @@ int main() {
 
     //perfMessure(AVX_u32, iterations, rand_ints);
     perfMessure(viaXor_u32, iterations, rand_ints);
+    perfMessure(viaXorA_u32, iterations, rand_ints);
+    perfMessure(viaXorB_u32, iterations, rand_ints);
     _GNUC_ONLY(perfMessure(instructionJmp_u32, iterations, rand_ints));
     perfMessure(switch_u32, iterations, rand_ints);
 
     #endif
     #ifdef PERF_u64
 
-    iterations = 800000000ull;
+    iterations = 800000000ull; // 800000000ull
 
-    printf("\nShuffle 64-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nShuffle 64-bit: Time taken to calculate %zu results...\n", iterations);
     perfMessure(scalar_u64, iterations, rand_ints);
     perfMessure(cmov_u64, iterations, rand_ints);
     perfMessure(selectHiLo_u64, iterations, rand_ints);
     perfMessure(selecRev_u64, iterations, rand_ints);
+    perfMessure(viaXor_u64, iterations, rand_ints);
 
     #endif
 

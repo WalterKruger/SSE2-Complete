@@ -5,25 +5,25 @@
 #include <time.h>   // Messuring clock cycles
 
 #define MAYBE_VOLATILE
-#define _GNUC_ONLY(x)   // Nothing
 
 #if defined(__GNUC__) || defined(__clang__) || defined(__INTEL_LLVM_COMPILER)
     #define GNUC_EXTENTION
     #define NOINLINE __attribute__((noinline))
     #define UNUSED __attribute__((unused))
-    #undef _GNUC_ONLY
     #define _GNUC_ONLY(x) x
 #elif defined(_MSC_VER)
     #define UNUSED
     #define NOINLINE __declspec(noinline)
-    #define _GNUC_ONLY(x) 
 #else
     #define NOINLINE
     #define UNUSED
-    #define _GNUC_ONLY(x)
     // If we can't inline, prevent the result variable from being optimized away
     #undef MAYBE_VOLATILE
     #define MAYBE_VOLATILE volatile
+#endif
+
+#ifndef _GNUC_ONLY
+    #define _GNUC_ONLY(x)   // Nothing
 #endif
 
 // More readable than a #ifdef macro around every statement

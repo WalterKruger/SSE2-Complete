@@ -93,6 +93,16 @@ NOINLINE __m128i selecRev_u64(__m128i toShuff, __m128i indexes) {
     return _either_i128(toShuffRev, toShuff, selectsRev);
 }
 
+NOINLINE __m128i viaXor_u64(__m128i toShuff, __m128i indexes) {
+    __m128i dupLo32 = _mm_shuffle_epi32(indexes, _MM_SHUFFLE(2,2, 0,0));
+    __m128i selectsHi = _mm_srai_epi32(_mm_slli_epi32(dupLo32, 31), 31);
+
+    __m128i LO = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(1,0, 1,0));
+    __m128i FULL = _mm_xor_si128(toShuff, _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(1,0, 3,2)));
+
+    return _selectXorBoth_i128(LO, FULL, selectsHi);
+}
+
 
 
 // ====== 32-bit ======
@@ -181,6 +191,61 @@ NOINLINE __m128i viaXor_u32(__m128i toShuff, __m128i indexes) {
     __m128i ifInLoRemove = _selectXorBoth_i128(b, LO, isInOdd);
 
     return _mm_xor_si128(part_half, _either_i128(ifInHiRemove, ifInLoRemove, isInHi));
+}
+
+NOINLINE __m128i viaXorA_u32(__m128i toShuff, __m128i indexes) {
+
+    __m128i a = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(0,0,0,0));
+    __m128i b = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(1,1,1,1));
+    __m128i c = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(2,2,2,2));
+    __m128i d = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(3,3,3,3));
+
+    __m128i LO = _mm_xor_si128(a, b);
+    __m128i HI = _mm_xor_si128(c, d);
+    __m128i FULL = _mm_xor_si128(LO, HI);
+
+    __m128i EVEN = _mm_xor_si128(c, a);
+
+
+    __m128i isInHi = _mm_srai_epi32(_mm_slli_epi32(indexes, 32-2), 31);
+    __m128i isInOdd = _mm_srai_epi32(_mm_slli_epi32(indexes, 32-1), 31);
+
+    __m128i part_half =     _selectXorBoth_i128(LO, FULL, isInHi);
+    #if 0
+    __m128i selIfEven =  _either_i128(c, a, isInHi);
+    #else
+    __m128i selIfEven =  _selectXorBoth_i128(a, EVEN, isInHi);
+    #endif
+
+    // a ^ ((a^b) & isOdd) = (isOdd)? a^a^b : a
+    return _selectXorBoth_i128(selIfEven, part_half, isInOdd);
+}
+
+NOINLINE __m128i viaXorB_u32(__m128i toShuff, __m128i indexes) {
+    __m128i aaac = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(2,0,0,0));
+
+    __m128i non_LO_EVEN_HI = _mm_xor_si128(toShuff, aaac);
+
+    __m128i LO =    _mm_shuffle_epi32(non_LO_EVEN_HI, _MM_SHUFFLE(1,1,1,1));
+    __m128i EVEN =  _mm_shuffle_epi32(non_LO_EVEN_HI, _MM_SHUFFLE(2,2,2,2));
+    __m128i HI =    _mm_shuffle_epi32(non_LO_EVEN_HI, _MM_SHUFFLE(3,3,3,3));
+
+    __m128i FULL = _mm_xor_si128(LO, HI);
+    __m128i a = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(0,0,0,0));
+
+
+    __m128i isInHi = _mm_srai_epi32(_mm_slli_epi32(indexes, 32-2), 31);
+    __m128i isInOdd = _mm_srai_epi32(_mm_slli_epi32(indexes, 32-1), 31);
+
+    __m128i part_half =     _selectXorBoth_i128(LO, FULL, isInHi);
+    #if 0
+    __m128i selIfEven =  _either_i128(c, a, isInHi);
+    #else
+    __m128i selIfEven =  _selectXorBoth_i128(a, EVEN, isInHi);
+    #endif
+
+    // a ^ ((a^b) & isOdd) = (isOdd)? a^a^b : a
+    return _selectXorBoth_i128(selIfEven, part_half, isInOdd);
 }
 
 
@@ -430,6 +495,80 @@ NOINLINE __m128i clang_u16(__m128i toShuff, __m128i indexes) {
     return _mm_unpacklo_epi64(resLo, resHi);    
 }
 
+NOINLINE __m128i viaXor_u16(__m128i toShuff, __m128i indexes) {
+    #if 0
+    __m128i a = _mm_shuffle_epi32(_mm_shufflelo_epi16(toShuff, _MM_SHUFFLE(0,0,0,0)), _MM_SHUFFLE(0,0,0,0));
+    __m128i b = _mm_shuffle_epi32(_mm_shufflelo_epi16(toShuff, _MM_SHUFFLE(1,1,1,1)), _MM_SHUFFLE(0,0,0,0));
+    __m128i c = _mm_shuffle_epi32(_mm_shufflelo_epi16(toShuff, _MM_SHUFFLE(2,2,2,2)), _MM_SHUFFLE(0,0,0,0));
+    __m128i d = _mm_shuffle_epi32(_mm_shufflelo_epi16(toShuff, _MM_SHUFFLE(3,3,3,3)), _MM_SHUFFLE(0,0,0,0));
+
+    __m128i E = _mm_shuffle_epi32(_mm_shufflehi_epi16(toShuff, _MM_SHUFFLE(0,0,0,0)), _MM_SHUFFLE(2,2,2,2));
+    __m128i F = _mm_shuffle_epi32(_mm_shufflehi_epi16(toShuff, _MM_SHUFFLE(1,1,1,1)), _MM_SHUFFLE(2,2,2,2));
+    __m128i G = _mm_shuffle_epi32(_mm_shufflehi_epi16(toShuff, _MM_SHUFFLE(2,2,2,2)), _MM_SHUFFLE(2,2,2,2));
+    __m128i H = _mm_shuffle_epi32(_mm_shufflehi_epi16(toShuff, _MM_SHUFFLE(3,3,3,3)), _MM_SHUFFLE(2,2,2,2));
+
+    #else
+
+    __m128i aa_bb = _mm_shufflelo_epi16(toShuff, _MM_SHUFFLE(1,1,0,0));
+    __m128i cc_dd = _mm_shufflelo_epi16(toShuff, _MM_SHUFFLE(3,3,2,2));
+    __m128i a = _mm_shuffle_epi32(aa_bb, _MM_SHUFFLE(0,0,0,0));
+    __m128i b = _mm_shuffle_epi32(aa_bb, _MM_SHUFFLE(1,1,1,1));
+    __m128i c = _mm_shuffle_epi32(cc_dd, _MM_SHUFFLE(0,0,0,0));
+    __m128i d = _mm_shuffle_epi32(cc_dd, _MM_SHUFFLE(1,1,1,1));
+
+    __m128i ee_ff = _mm_shufflehi_epi16(toShuff, _MM_SHUFFLE(1,1,0,0));
+    __m128i gg_hh = _mm_shufflehi_epi16(toShuff, _MM_SHUFFLE(3,3,2,2));
+    __m128i E = _mm_shuffle_epi32(ee_ff, _MM_SHUFFLE(2,2,2,2));
+    __m128i F = _mm_shuffle_epi32(ee_ff, _MM_SHUFFLE(3,3,3,3));
+    __m128i G = _mm_shuffle_epi32(gg_hh, _MM_SHUFFLE(2,2,2,2));
+    __m128i H = _mm_shuffle_epi32(gg_hh, _MM_SHUFFLE(3,3,3,3));
+
+    #endif
+
+    __m128i aXORe = _mm_xor_si128(a, E);
+
+    __m128i even16Lo = _mm_xor_si128(a, b);
+    __m128i even16 = _mm_xor_si128(even16Lo, _mm_xor_si128(E, F));
+
+    __m128i even8Lo = _mm_xor_si128(a, c);
+    __m128i even8 = _mm_xor_si128(even8Lo, _mm_xor_si128(E, G));
+
+    __m128i LOW = _mm_xor_si128(even16Lo, _mm_xor_si128(c, d));
+    __m128i FULL = _mm_xor_si128(LOW, _mm_xor_si128(_mm_xor_si128(E, F), _mm_xor_si128(G, H)));
+    /*
+    __m128i loDupe = _mm_unpacklo_epi16(toShuff, toShuff);
+    __m128i hiDupe = _mm_unpackhi_epi16(toShuff, toShuff);
+
+    __m128i aE_bF_cG_dH = _mm_xor_si128(loDupe, hiDupe);
+
+    __m128i aXORe = _mm_shuffle_epi32(aE_bF_cG_dH, _MM_SHUFFLE(0,0,0,0));
+
+    __m128i non_e16_e8_aEdH = _mm_xor_si128(aE_bF_cG_dH, aXORe);
+    // FULL: aEdH ^ b^c^d ^ F^G
+
+    __m128i even8 =     _mm_shuffle_epi32(non_e16_e8_aEdH, _MM_SHUFFLE(2,2,2,2));
+    __m128i even16 =    _mm_shuffle_epi32(non_e16_e8_aEdH, _MM_SHUFFLE(1,1,1,1));
+    */
+
+
+
+    __m128i isOdd64 = _mm_srai_epi16(_mm_slli_epi16(indexes, 16-3), 15);
+    
+    __m128i cur =           _selectXorBoth_i128(LOW, FULL, isOdd64);
+    __m128i toSelHalfLo =   _selectXorBoth_i128(even16Lo, even16, isOdd64);
+
+    __m128i toSelHalfEven =     _selectXorBoth_i128(even8Lo, even8, isOdd64);
+    __m128i toSelHalfEvenLo =   _selectXorBoth_i128(a, aXORe, isOdd64);
+
+
+    __m128i isOdd32 = _mm_srai_epi16(_mm_slli_epi16(indexes, 16-2), 15);
+    cur =           _selectXorBoth_i128(toSelHalfLo, cur, isOdd32);
+    toSelHalfLo =   _selectXorBoth_i128(toSelHalfEvenLo, toSelHalfEven, isOdd32);
+
+
+    __m128i isOdd16 = _mm_srai_epi16(_mm_slli_epi16(indexes, 16-1), 15);
+    return _selectXorBoth_i128(toSelHalfLo, cur, isOdd16);
+}
 
 
 // ====== 8-bit ======
@@ -600,68 +739,101 @@ NOINLINE __m128i SSSE3_u8(__m128i toShuff, __m128i indexes) {
 
 
 NOINLINE __m128i viaXor_u8(__m128i toShuff, __m128i indexes) {
-    uint8_t x[16]; _mm_storeu_si128((__m128i*)x, toShuff);
-    /*
-    even64: 1^2^3^4^5^6^7^8
-    odd64: 9^10^11^12^13^14^15^16
+    __m128i loDupe = _mm_unpacklo_epi8(toShuff, toShuff);
+    __m128i hiDupe = _mm_unpackhi_epi8(toShuff, toShuff);
 
-    even32: 1^2^3^4 ^ 9^10^11^12
-    odd32: 5^6^7^8 ^ 13^14^15^16
+    __m128i LO_aa_bb = _mm_shufflelo_epi16(loDupe, _MM_SHUFFLE(1,1,0,0));
+    __m128i LO_cc_dd = _mm_shufflelo_epi16(loDupe, _MM_SHUFFLE(3,3,2,2));
+    __m128i HI_ee_ff = _mm_shufflehi_epi16(loDupe, _MM_SHUFFLE(1,1,0,0));
+    __m128i HI_gg_hh = _mm_shufflehi_epi16(loDupe, _MM_SHUFFLE(3,3,2,2));
 
-    even16: 1^2 ^ 5^6 ^ 9^10 ^ 13^14
-    odd16: 3^4 ^ 7^8 ^ 11^12 ^ 15^16
-    */
-   // Set all 8-bit lanes to the cumlative XOR between all 8-bit elements within each even/odd N-bit lane
+    __m128i LO_ii_jj = _mm_shufflelo_epi16(hiDupe, _MM_SHUFFLE(1,1,0,0));
+    __m128i LO_kk_ll = _mm_shufflelo_epi16(hiDupe, _MM_SHUFFLE(3,3,2,2));
+    __m128i HI_mm_nn = _mm_shufflehi_epi16(hiDupe, _MM_SHUFFLE(1,1,0,0));
+    __m128i HI_oo_pp = _mm_shufflehi_epi16(hiDupe, _MM_SHUFFLE(3,3,2,2));
 
-    __m128i even64 = _mm_set1_epi8(x[0]^x[1]^x[2]^x[3]^x[4]^x[5]^x[6]^x[7]);
-    __m128i odd64 = _mm_set1_epi8(x[8]^x[9]^x[10]^x[11]^x[12]^x[13]^x[14]^x[15]);
+    __m128i a = _mm_shuffle_epi32(LO_aa_bb, _MM_SHUFFLE(0,0,0,0));
+    __m128i b = _mm_shuffle_epi32(LO_aa_bb, _MM_SHUFFLE(1,1,1,1));
+    __m128i c = _mm_shuffle_epi32(LO_cc_dd, _MM_SHUFFLE(0,0,0,0));
+    __m128i d = _mm_shuffle_epi32(LO_cc_dd, _MM_SHUFFLE(1,1,1,1));
 
-    // The `T` suffex indicates values that overlap with the pervious odd values
-    // FIXME: During the o/e16 it gains two additional terms instead of removing them
-    __m128i evenT32 = _mm_set1_epi8(x[8]^x[9]^x[10]^x[11]);
-    __m128i evenF32 = _mm_set1_epi8(x[0]^x[1]^x[2]^x[3]);
-    __m128i oddT32 = _mm_set1_epi8(x[12]^x[13]^x[14]^x[15]);
-    __m128i oddF32 = _mm_set1_epi8(x[4]^x[5]^x[6]^x[7]);
+    __m128i e = _mm_shuffle_epi32(HI_ee_ff, _MM_SHUFFLE(2,2,2,2));
+    __m128i f = _mm_shuffle_epi32(HI_ee_ff, _MM_SHUFFLE(3,3,3,3));
+    __m128i g = _mm_shuffle_epi32(HI_gg_hh, _MM_SHUFFLE(2,2,2,2));
+    __m128i h = _mm_shuffle_epi32(HI_gg_hh, _MM_SHUFFLE(3,3,3,3));
 
-    __m128i evenT16 = _mm_set1_epi8(x[4]^x[5] ^ x[12]^x[13]);
-    __m128i evenF16 = _mm_set1_epi8(x[0]^x[1] ^ x[8]^x[9]);
-    __m128i oddT16 = _mm_set1_epi8(x[6]^x[7] ^ x[14]^x[15]);
-    __m128i oddF16 = _mm_set1_epi8(x[2]^x[3] ^ x[10]^x[11]);
+    __m128i i = _mm_shuffle_epi32(LO_ii_jj, _MM_SHUFFLE(0,0,0,0));
+    __m128i j = _mm_shuffle_epi32(LO_ii_jj, _MM_SHUFFLE(1,1,1,1));
+    __m128i k = _mm_shuffle_epi32(LO_kk_ll, _MM_SHUFFLE(0,0,0,0));
+    __m128i l = _mm_shuffle_epi32(LO_kk_ll, _MM_SHUFFLE(1,1,1,1));
 
-    __m128i evenT8 = _mm_set1_epi8(x[2] ^ x[6] ^ x[10] ^ x[14]);
-    __m128i evenF8 = _mm_set1_epi8(x[0] ^ x[4] ^ x[8] ^ x[12]);
-    __m128i oddT8 = _mm_set1_epi8(x[3] ^ x[7] ^ x[11] ^ x[15]);
-    __m128i oddF8 = _mm_set1_epi8(x[1] ^ x[5] ^ x[9] ^ x[13]);
+    __m128i m = _mm_shuffle_epi32(HI_mm_nn, _MM_SHUFFLE(2,2,2,2));
+    __m128i n = _mm_shuffle_epi32(HI_mm_nn, _MM_SHUFFLE(3,3,3,3));
+    __m128i o = _mm_shuffle_epi32(HI_oo_pp, _MM_SHUFFLE(2,2,2,2));
+    __m128i p = _mm_shuffle_epi32(HI_oo_pp, _MM_SHUFFLE(3,3,3,3));
 
-    // Indexes account for bits that are in range
-    indexes = _mm_and_si128(indexes, _mm_set1_epi8(0x0F));
 
-    __m128i isOdd64 = _mm_cmpgt_epi8(indexes, _mm_set1_epi8(7));
-    __m128i isOdd32 = _mm_cmpeq_epi8(_mm_and_si128(indexes, _mm_set1_epi8(1<<2)), _mm_setzero_si128());
-    __m128i isOdd16 = _mm_cmpeq_epi8(_mm_and_si128(indexes, _mm_set1_epi8(1<<1)), _mm_setzero_si128());
-    __m128i isOdd8 = _mm_cmpeq_epi8(_mm_and_si128(indexes, _mm_set1_epi8(1)), _mm_setzero_si128());
+    __m128i toSel16FF_lo = a;
+    __m128i toSel16FF_HL = _mm_xor_si128(toSel16FF_lo, i);
 
-    // Returns the values to remove (oposite) => conditionIsOdd? even  : odd
-    struct sectionRemove {__m128i curF_PrevF; __m128i curF_PrevT; __m128i curT_PrevF; __m128i curT_PrevT; __m128i curCond;}
-    SECTIONS[] = {
-        //{odd64, even64, isOdd64},
-        {oddF32, oddT32, evenF32, evenT32, isOdd32},
-        {oddF16, oddT16, evenF16, evenT16, isOdd16},
-        {oddF8, oddT8, evenF8, evenT8, isOdd8}
-    };
+    __m128i toSel16FT_lo = _mm_xor_si128(a, e);
+    __m128i toSel16FT_HL = _mm_xor_si128(toSel16FT_lo, _mm_xor_si128(i,m));
+
+    __m128i toSel16TF_lo = _mm_xor_si128(a, c);
+    __m128i toSel16TF_HL = _mm_xor_si128(toSel16TF_lo, _mm_xor_si128(k,l));
+
+    __m128i toSel16TT_lo = _mm_xor_si128(_mm_xor_si128(a,c), _mm_xor_si128(e,g));
+    __m128i toSel16TT_HL = _mm_xor_si128(toSel16TT_lo, _mm_xor_si128(_mm_xor_si128(k,l), _mm_xor_si128(m,o)));
+
+
+    __m128i toSel32F_lo = _mm_xor_si128(a, b);
+    __m128i toSel32F_HL = _mm_xor_si128(toSel32F_lo, _mm_xor_si128(i,j));
+
+    __m128i toSel32T_lo = _mm_xor_si128(_mm_xor_si128(a, b), _mm_xor_si128(e, f));
+    __m128i toSel32T_HL = _mm_xor_si128(toSel32T_lo, _mm_xor_si128(_mm_xor_si128(i, j), _mm_xor_si128(m, n)));
+
+
+    __m128i toSel64_lo = _mm_xor_si128(_mm_xor_si128(a,b), _mm_xor_si128(c,d));
+    __m128i toSel64_HL = _mm_xor_si128(toSel64_lo, _mm_xor_si128(_mm_xor_si128(i,j), _mm_xor_si128(k,l)) );
+
+    __m128i LOW = _mm_xor_si128(toSel64_lo, _mm_xor_si128(_mm_xor_si128(e,f), _mm_xor_si128(g,h)));
+    __m128i FULL = _mm_xor_si128(toSel64_HL, _mm_xor_si128(_mm_xor_si128(i,j), _mm_xor_si128(k,l)) );
+    FULL = _mm_xor_si128(FULL, _mm_xor_si128(_mm_xor_si128(m,n), _mm_xor_si128(o,p)) );
+
+
 
     
-    __m128i partialShuff = _either_i128(odd64, even64, isOdd64);
-    __m128i prevCond = isOdd64;
-    for (size_t i=0; i<3; i++) {
-        struct sectionRemove curToRemove = SECTIONS[i];
+    __m128i isEven64 = _mm_cmplt_epi8(_mm_slli_epi16(indexes, 8-4), _mm_setzero_si128());
 
-        __m128i removeIfPrevF = _either_i128(curToRemove.curT_PrevF, curToRemove.curF_PrevF, curToRemove.curCond);
-        __m128i removeIfPrevT = _either_i128(curToRemove.curT_PrevT, curToRemove.curF_PrevT, curToRemove.curCond);
+    __m128i cur =       _selectXorBoth_i128(LOW, FULL, isEven64);
+    __m128i toSel64 =   _selectXorBoth_i128(toSel64_lo, toSel64_HL, isEven64);
 
-        partialShuff = _mm_xor_si128(partialShuff, _either_i128(removeIfPrevT, removeIfPrevF, prevCond));
-        prevCond = curToRemove.curCond;
-    }
+    __m128i toSel32T =  _selectXorBoth_i128(toSel32T_lo, toSel32T_HL, isEven64);
+    __m128i toSel32F =  _selectXorBoth_i128(toSel32F_lo, toSel32F_HL, isEven64);
 
-    return partialShuff; 
+    __m128i toSel16TT = _selectXorBoth_i128(toSel16TT_lo, toSel16TT_HL, isEven64);
+    __m128i toSel16TF = _selectXorBoth_i128(toSel16TF_lo, toSel16TF_HL, isEven64);
+    __m128i toSel16FT = _selectXorBoth_i128(toSel16FT_lo, toSel16FT_HL, isEven64);
+    __m128i toSel16FF = _selectXorBoth_i128(toSel16FF_lo, toSel16FF_HL, isEven64);
+
+
+    __m128i isEven32 = _mm_cmplt_epi8(_mm_slli_epi16(indexes, 8-3), _mm_setzero_si128());
+
+    cur = _selectXorBoth_i128(toSel64, cur, isEven32);
+    __m128i toSel32 =   _selectXorBoth_i128(toSel32F, toSel32T, isEven32);
+    __m128i toSel16T =  _selectXorBoth_i128(toSel16TF, toSel16TT, isEven32);
+    __m128i toSel16F =  _selectXorBoth_i128(toSel16FF, toSel16FT, isEven32);
+
+
+    __m128i isEven16 = _mm_cmplt_epi8(_mm_slli_epi16(indexes, 8-2), _mm_setzero_si128());
+
+    cur = _selectXorBoth_i128(toSel32, cur, isEven16);
+    __m128i toSel16 = _selectXorBoth_i128(toSel16F, toSel16T, isEven16);
+
+
+    __m128i isEven8 = _mm_cmplt_epi8(_mm_slli_epi16(indexes, 8-1), _mm_setzero_si128());
+
+    cur = _selectXorBoth_i128(toSel16, cur, isEven8);
+
+    return cur;
 }

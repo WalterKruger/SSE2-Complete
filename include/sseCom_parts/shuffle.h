@@ -3,6 +3,7 @@
 #include <emmintrin.h>  // SSE2
 #include <stdint.h>
 
+#include "_common.h"
 
 // Compiler otherwise calculate a bunch of partial results then combine them, which is 25% slower...
 #ifdef SSECOM_GNUC_EXTENTION
@@ -93,25 +94,29 @@ __m128i _shuffleVar_i16x8(__m128i toShuff, __m128i indexes) {
 
 // Shuffle 32-bit integers using the corresponding index
 __m128i _shuffleVar_i32x4(__m128i toShuff, __m128i indexes) {
-    indexes = _mm_and_si128(indexes, _mm_set1_epi32(0b11));
+    // After getting the xor between the upper/lower, we can narrow it down
+    // further as the xor identity either returns the even or
+    // removes the odd part (as `even ^ BOTH = odd`)
+    __m128i aaac = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(2,0,0,0));
 
-    uint32_t toShuffArr[4];
-    _mm_storeu_si128((__m128i*)toShuffArr, toShuff);
+    __m128i non_LO_EVEN_HI = _mm_xor_si128(toShuff, aaac);
 
-    uint32_t index_0 = _mm_cvtsi128_si32(indexes);
-    uint32_t index_1 = _mm_cvtsi128_si32(_mm_shuffle_epi32(indexes, _MM_SHUFFLE(1,1,1,1)));
-    uint32_t index_2 = _mm_cvtsi128_si32(_mm_shuffle_epi32(indexes, _MM_SHUFFLE(2,2,2,2)));
-    uint32_t index_3 = _mm_cvtsi128_si32(_mm_shuffle_epi32(indexes, _MM_SHUFFLE(3,3,3,3)));
+    __m128i LO =    _mm_shuffle_epi32(non_LO_EVEN_HI, _MM_SHUFFLE(1,1,1,1));
+    __m128i EVEN =  _mm_shuffle_epi32(non_LO_EVEN_HI, _MM_SHUFFLE(2,2,2,2));
+    __m128i HI =    _mm_shuffle_epi32(non_LO_EVEN_HI, _MM_SHUFFLE(3,3,3,3));
 
-    __m128i res_0 = _mm_loadu_si32(toShuffArr + index_0);
-    __m128i res_1 = _mm_loadu_si32(toShuffArr + index_1);
-    __m128i resLower = _mm_unpacklo_epi32(res_0, res_1);
+    __m128i FULL = _mm_xor_si128(LO, HI);
+    __m128i a = _mm_shuffle_epi32(toShuff, _MM_SHUFFLE(0,0,0,0));
 
-    __m128i res_2 = _mm_loadu_si32(toShuffArr + index_2);
-    __m128i res_3 = _mm_loadu_si32(toShuffArr + index_3);
-    __m128i resUpper = _mm_unpacklo_epi32(res_2, res_3);
-    
-    return _mm_unpacklo_epi64(resLower, resUpper);
+
+    __m128i isInHi = _mm_srai_epi32(_mm_slli_epi32(indexes, 32-2), 31);
+    __m128i isInOdd = _mm_srai_epi32(_mm_slli_epi32(indexes, 32-1), 31);
+
+    // a ^ ((a^b) & isOdd) = (isOdd)? a^a^b : a
+    __m128i part_half = _mm_xor_si128(LO, _mm_and_si128(FULL, isInHi));
+    __m128i selIfEven =  _mm_xor_si128(a, _mm_and_si128(EVEN, isInHi));
+
+    return _mm_xor_si128(selIfEven, _mm_and_si128(part_half, isInOdd));
 }
 
 // Shuffle 64-bit integers using the corresponding index
