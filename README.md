@@ -32,7 +32,7 @@ This library should work on all major compilers (clang, GCC, MSVC, ICC). However
 
 
 ### Unit and performance testing
-Additionally, this repository [includes unit tests and performance testing](tests) source files. If you wish to use them, you will have to compile them yourself.
+Additionally, this repository [includes unit tests and microbenchmark testing](tests) source files. The microbenchmarks compare multiple different implementations of the same operation which I used them to determine which version to use in this library. Our [releases](../../releases) contain compiled versions for both Windows and Linux which you can run yourself.
 
 # Credits
 "*Faster Remainder by Direct Computation: Applications to Compilers and Software Libraries*" Daniel Lemire, Owen Kaser, Nathan Kurz [arXiv:1902.01961](https://arxiv.org/abs/1902.01961)
