@@ -301,6 +301,27 @@ NOINLINE __m128i directBitByBitR_8(__m128i toShift, __m128i amount) {
     return toShift;
 }
 
+NOINLINE __m128i directBitByBitAR_8(__m128i toShift, __m128i amount) {
+
+    // Element size doesn't matter
+    amount = _mm_slli_epi16(amount, 8-3);
+
+    toShift = _either_i128(_shiftR_u8x16(toShift,1<<2), toShift, _fillWithMSB_i8x16(amount));
+    amount = _mm_add_epi8(amount,amount);
+
+    // avg(a,b): (a + b + 1) >> 1
+    // x - ceil(x/2) = x>>1
+    __m128i shiftBy2 = _fillWithMSB_i8x16(amount);
+    toShift = _mm_sub_epi8(toShift, _mm_and_si128(shiftBy2, _mm_avg_epu8(toShift, _mm_setzero_si128())));
+    toShift = _mm_sub_epi8(toShift, _mm_and_si128(shiftBy2, _mm_avg_epu8(toShift, _mm_setzero_si128())));
+    amount = _mm_add_epi8(amount,amount);
+
+    __m128i ceilDiv2 = _mm_avg_epu8(toShift, _mm_setzero_si128());
+    toShift = _mm_sub_epi8(toShift, _mm_and_si128(ceilDiv2, _fillWithMSB_i8x16(amount)));
+
+    return toShift;
+}
+
 NOINLINE __m128i repeatedHalfR_8(__m128i toShift, __m128i amount) {
 
     amount = _mm_and_si128(amount, _mm_set1_epi8(0b111));
@@ -691,6 +712,26 @@ NOINLINE __m128i directBitByBit_8(__m128i toShift, __m128i amount) {
     amount = _mm_add_epi8(amount,amount);
 
     toShift = _either_i128(_shiftL_u8x16(toShift,1<<1), toShift, MSB_SET8(amount));
+    amount = _mm_add_epi8(amount,amount);
+
+    // Doubling avoids having to call `_either`
+    toShift = _mm_add_epi8(toShift, _mm_and_si128(toShift, MSB_SET8(amount)));
+    
+
+    return toShift;
+}
+
+NOINLINE __m128i directBitByBitA_8(__m128i toShift, __m128i amount) {
+
+    // Element size doesn't matter
+    amount = _mm_slli_epi16(amount, 8-3);
+
+    toShift = _either_i128(_shiftL_u8x16(toShift,1<<2), toShift, MSB_SET8(amount));
+    amount = _mm_add_epi8(amount,amount);
+
+    __m128i shiftBy2 = MSB_SET8(amount);
+    toShift = _mm_add_epi8(toShift, _mm_and_si128(toShift, shiftBy2));
+    toShift = _mm_add_epi8(toShift, _mm_and_si128(toShift, shiftBy2));
     amount = _mm_add_epi8(amount,amount);
 
     // Doubling avoids having to call `_either`

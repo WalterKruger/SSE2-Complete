@@ -93,12 +93,14 @@ int main() {
     perfMessure(scalar_8, iterations, rand_ints);
     perfMessure(powOf2BitByBit_8, iterations, rand_ints);
     perfMessure(directBitByBit_8, iterations, rand_ints);
+	perfMessure(directBitByBitA_8, iterations, rand_ints);
     perfMessure(repeatedDouble_8, iterations, rand_ints);
     perfMessure(powOf2Float_8, iterations, rand_ints);
 
     printf("\n8-bit RIGHT shifts: Time taken to calculate %zu results...\n", iterations);
     perfMessure(scalarR_8, iterations, rand_ints);
     perfMessure(directBitByBitR_8, iterations, rand_ints);
+	perfMessure(directBitByBitAR_8, iterations, rand_ints);
     perfMessure(repeatedHalfR_8, iterations, rand_ints);
     #endif
 

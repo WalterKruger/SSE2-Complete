@@ -44,7 +44,10 @@ __m128i _shiftLvar_u8x16(__m128i u8ToShift, __m128i amount) {
     u8ToShift = _either_i128(_shiftL_u8x16(u8ToShift,1<<2), u8ToShift, _fillWithMSB_i8x16(amount));
     amount = _mm_add_epi8(amount,amount);
 
-    u8ToShift = _either_i128(_shiftL_u8x16(u8ToShift,1<<1), u8ToShift, _fillWithMSB_i8x16(amount));
+    // Cheaper to shift left via add twice
+    __m128i shiftsBy2 = _fillWithMSB_i8x16(amount);
+    u8ToShift = _mm_add_epi8(u8ToShift, _mm_and_si128(u8ToShift, shiftsBy2));
+    u8ToShift = _mm_add_epi8(u8ToShift, _mm_and_si128(u8ToShift, shiftsBy2));
     amount = _mm_add_epi8(amount,amount);
 
     // Doubling avoids having to call `_either`
