@@ -269,64 +269,68 @@ SSECOM_INLINE __m128d _convert_i64x2_f64x2(__m128i i64_toCvt) {
 
 // Converts unsigned 64-bit integers into 64-bit floats
 SSECOM_INLINE __m128d _convert_u64x2_f64x2(__m128i u64_toCvt) {
-    // Magic method based on clang (when converting a uint64 => double)
-    const uint32_t MAGIC_EXP_LO = DBL_MAX_EXP + DBL_MANT_DIG - 2;
-    const uint32_t MAGIC_EXP_HI = DBL_MAX_EXP + DBL_MANT_DIG+32 - 2;
-
-    const __m128i MAGIC_EXP = _mm_setr_epi32(
-        MAGIC_EXP_LO << (DBL_MANT_DIG-33), MAGIC_EXP_LO << (DBL_MANT_DIG-33),
-        MAGIC_EXP_HI << (DBL_MANT_DIG-33), MAGIC_EXP_HI << (DBL_MANT_DIG-33)
-    );
-
+    // Convert lower and upper halves separately then recombine
+    // Half is converted by depositing into mantissa
     const __m128d MAGIC_TERM_LO = _mm_set1_pd(1ull << (DBL_MANT_DIG-1));
     const __m128d MAGIC_TERM_HI = _mm_set1_pd(1.9342813113834067e+25); // 2**(DBL_MANT_DIG-1+32);
 
+    const __m128i MAGIC_EXP = _shuffleLoHi_i32x4(
+        _mm_castpd_si128(MAGIC_TERM_LO), _MM_SHUFHALF(1, 1),
+        _mm_castpd_si128(MAGIC_TERM_HI), _MM_SHUFHALF(1, 1)
+    );
+
     // [inp1.hi, inp0.hi, inp1.lo, inp0.lo]
-    __m128i inp_hihi_lolo = _mm_shuffle_epi32(u64_toCvt, _MM_SHUFFLE(3,1,2,0));
+    __m128i loHiInterleave = _mm_shuffle_epi32(u64_toCvt, _MM_SHUFFLE(3,1,2,0));
 
-    // [MAGIC, inp1.lo, MAGIC, inp0.lo]
-    __m128d magicFlt_lo = _mm_castsi128_pd(_mm_unpacklo_epi32(inp_hihi_lolo, MAGIC_EXP));
-    __m128d magicFlt_hi = _mm_castsi128_pd(_mm_unpackhi_epi32(inp_hihi_lolo, MAGIC_EXP));
+    // Set the exponent to "shift" the mantissa into the integer part
+    __m128d magicExpo_lo = _mm_castsi128_pd(_mm_unpacklo_epi32(loHiInterleave, MAGIC_EXP));
+    __m128d magicExpo_hi = _mm_castsi128_pd(_mm_unpackhi_epi32(loHiInterleave, MAGIC_EXP));
 
-    // Promotes using a memory argument rather than a 128-bit to register
-    magicFlt_lo = _mm_sub_pd(magicFlt_lo, *(__m128d*)&MAGIC_TERM_LO);
-    magicFlt_hi = _mm_sub_pd(magicFlt_hi, *(__m128d*)&MAGIC_TERM_HI);
+    // Removes the implicit leading one
+    __m128d cvted_lo = _mm_sub_pd(magicExpo_lo, MAGIC_TERM_LO);
+    __m128d cvted_hi = _mm_sub_pd(magicExpo_hi, MAGIC_TERM_HI);
 
-    return _mm_add_pd(magicFlt_hi, magicFlt_lo);
+    return _mm_add_pd(cvted_hi, cvted_lo);
 }
 
 // Converts unsigned 64-bit integers into 32-bit floats, store in lower half and zero upper
 __m128 _convert_u64x2_f32x4(__m128i u64_toCvt) {
-    //
-    //if ((int64_t)toCvt >= 0) {
-    //    return signedIntToF32(toCvt);
-    //} else {
-    //    int64_t halfRoundUp = (toCvt >> 1) | (toCvt | 1);
-    //    float halfCvted = signedIntToF32(halfRoundUp);
-    //    return halfCvted + halfCvted;
-    //}
-    //
-    const __m128i LSB_MASK = _mm_set1_epi64x(1);
+    const __m128d MANT_AS_LOINT = _mm_set1_pd((double)(1ull << (DBL_MANT_DIG-1)));
+    const __m128d MANT_AS_HIINT = _mm_set1_pd(0x1p84); // MANT_BITS + 32
 
-    // Since conversion function assumes a signed input, we need to conditionally scale large input
-    __m128i needToScale = _fillWithMSB_i64x2(u64_toCvt);
+    const __m128i EXPO_INTERLEAVE = _shuffleLoHi_i32x4(
+        _mm_castpd_si128(MANT_AS_LOINT), _MM_SHUFHALF(3, 1), _mm_castpd_si128(MANT_AS_HIINT), _MM_SHUFHALF(3, 1)
+    );
 
-    // Half as int so in range then restore original value by doubling as float
-    __m128i halfDown = _mm_srli_epi64(u64_toCvt, 1);
+    __m128i lohi_interleave = _mm_shuffle_epi32(u64_toCvt, _MM_SHUFFLE(3,1, 2,0));
 
-    __m128i toCvt_LSB = _mm_and_si128(u64_toCvt, LSB_MASK);
+    // Set exponent to "shift" mantissa into the integer part
+    __m128d lo_magicExpo = _mm_castsi128_pd(_mm_unpacklo_epi32(lohi_interleave, EXPO_INTERLEAVE));
+    __m128d hi_magicExpo = _mm_castsi128_pd(_mm_unpackhi_epi32(lohi_interleave, EXPO_INTERLEAVE));
 
-    // At this range the float's ULP > 1, so conversion is exact but only if halfing rounds up
-    // Round up: `(x >> 1) | (x & 1)` Do nothing `[ (x>>1) + (x>>1) ] | (x & 1)`
-    __m128i halfDownOrRemoveLSB = _mm_add_epi64(halfDown, _mm_andnot_si128(needToScale, halfDown));
-    __m128i halfUpOrInput = _mm_or_si128(halfDownOrRemoveLSB, toCvt_LSB);
-    
+    // Remove the implict leading one
+    __m128d loCvted = _mm_sub_pd(lo_magicExpo, MANT_AS_LOINT);
+    __m128d hiCvted = _mm_sub_pd(hi_magicExpo, MANT_AS_HIINT);
 
-    __m128 cvted_or_cvtedHalf = _convert_i64x2_f32x4(halfUpOrInput);
+    // Fast2Sum
+    __m128d sum_loHi = _mm_add_pd(loCvted, hiCvted);
+    __m128d error_loHi = _mm_sub_pd(loCvted, _mm_sub_pd(sum_loHi, hiCvted));
 
-    // Doubling restores original value, but only if we previously halfed it
-    __m128 halfedAsInt_flt = _mm_castsi128_ps( _mm_bsrli_si128(needToScale, 4) ); // 64-bit mask => 32-bit
-    return _mm_add_ps(cvted_or_cvtedHalf, _mm_and_ps(halfedAsInt_flt, cvted_or_cvtedHalf));
+    // If that sum rounded to a value that would tie when converting,
+    // then a double-rounding error would occur
+
+    // Needlessly offsetting is fine except when offsetting to a tie (can't happen when LSB=0)
+    __m128i zeroOrNaNIfLSB = _mm_srai_epi32(_mm_slli_epi64(_mm_castpd_si128(sum_loHi), 63) , 31);
+
+    // NaN is always false, else compare with zero
+    __m128d hasNegError = _mm_cmplt_pd(error_loHi, _mm_castsi128_pd(zeroOrNaNIfLSB));
+    __m128d hasPosError = _mm_cmpgt_pd(error_loHi, _mm_castsi128_pd(zeroOrNaNIfLSB));
+
+    __m128i sumNoDoubleRound = _mm_castpd_si128(sum_loHi);
+    sumNoDoubleRound = _mm_add_epi64(sumNoDoubleRound, _mm_castpd_si128(hasNegError));
+    sumNoDoubleRound = _mm_sub_epi64(sumNoDoubleRound, _mm_castpd_si128(hasPosError));
+
+    return _mm_cvtpd_ps(_mm_castsi128_pd(sumNoDoubleRound));
 }
 
 
@@ -339,8 +343,9 @@ SSECOM_INLINE __m128i _convert_f32x4_u32x4(__m128 f32_toCvt) {
     __m128 f32_scaled = _mm_sub_ps(f32_toCvt, _mm_set1_ps(1ull << 32));
     __m128i scaledCvt = _mm_cvttps_epi32(f32_scaled);
 
-    __m128i isNegMask = _mm_srai_epi32(directCvt, 31);
-    return _mm_or_si128(_mm_and_si128(scaledCvt, isNegMask), directCvt);
+    // The overflow error value of "direct" is used to set the MSB of "scaled"
+    __m128i hasOverflowedMask = _mm_srai_epi32(directCvt, 31);
+    return _mm_or_si128(_mm_and_si128(scaledCvt, hasOverflowedMask), directCvt);
 }
 
 // Converts 32-bit floats into signed 64-bit integers via truncation

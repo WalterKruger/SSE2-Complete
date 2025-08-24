@@ -137,23 +137,23 @@ __m128i _mulHi_i8x16(__m128i termA, __m128i termB) {
 // ====== 16-bit ======
 
 // Multiply all signed 16-bit elements and return the lower 16-bit of the intermediate 32-bit product 
-SSECOM_INLINE __m128i _mulLo_i16x2(__m128i termA, __m128i termB) {
+SSECOM_INLINE __m128i _mulLo_i16x8(__m128i termA, __m128i termB) {
     return _mm_mullo_epi16(termA, termB);
 }
 
 // Multiply all unsigned 16-bit elements and return the lower 16-bit of the intermediate 32-bit product 
-SSECOM_INLINE __m128i _mulLo_u16x2(__m128i termA, __m128i termB) {
+SSECOM_INLINE __m128i _mulLo_u16x8(__m128i termA, __m128i termB) {
     // The low result is the same regardless of signess
     return _mm_mullo_epi16(termA, termB);
 }
 
 // Multiply all signed 16-bit elements and return the upper 16 bits of the intermediate 32-bit product 
-SSECOM_INLINE __m128i _mulHi_i16x2(__m128i termA, __m128i termB) {
+SSECOM_INLINE __m128i _mulHi_i16x8(__m128i termA, __m128i termB) {
     return _mm_mulhi_epi16(termA, termB);
 }
 
 // Multiply all unsigned 16-bit elements and return the upper 16 bits of the intermediate 32-bit product 
-SSECOM_INLINE __m128i _mulHi_u16x2(__m128i termA, __m128i termB) {
+SSECOM_INLINE __m128i _mulHi_u16x8(__m128i termA, __m128i termB) {
     return _mm_mulhi_epu16(termA, termB);
 }
 
@@ -211,7 +211,7 @@ SSECOM_INLINE __m128i _mulLo_u32x4(__m128i termA, __m128i termB) {
 }
 
 // Multiply all signed 32-bit elements and return the lower 32-bit of the intermediate 64-bit result
-__m128i _mulLo_i32x4(__m128i termA, __m128i termB) {
+SSECOM_INLINE __m128i _mulLo_i32x4(__m128i termA, __m128i termB) {
     // Low product is the same, regardless of signess
     return _mulLo_u32x4(termA, termB);
 }

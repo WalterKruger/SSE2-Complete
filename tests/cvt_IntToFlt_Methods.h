@@ -237,6 +237,248 @@ NOINLINE __m128 scaleLin_u64ToF32(__m128i u64_toCvt) {
     return _mm_unpacklo_ps(cvted_lo, cvted_hi);
 }
 
+NOINLINE __m128 doubleRound_u64ToF32(__m128i toCvt) {
+    // Works by doing a cheapish `u64 => f64` conversion, then hardware supported `f64 => f32`
+    // However, double rounding isn't exact so we check for that case and correct
+
+    const __m128i MANT_TRUNC_MASK = _mm_set1_epi64x((1 << (DBL_MANT_DIG - FLT_MANT_DIG)) - 1);
+    const __m128i DBL_TIED_MANT =   _mm_set1_epi64x(1 << (DBL_MANT_DIG - FLT_MANT_DIG - 1));
+
+    const __m128i DBL_MANT_MASK =_mm_set1_epi64x((1ull << (DBL_MANT_DIG-1)) - 1);
+    const __m128i FLT_MANTDIG_IN_DBLEXPO = _mm_set1_epi64x((uint64_t)FLT_MANT_DIG << (DBL_MANT_DIG-1));
+
+    //return _mm_cvtpd_ps(_convert_u64x2_f64x2(toCvt));
+
+    // This specific conversion is cheap
+    __m128i dblCvtedBits = _mm_castpd_si128(_convert_u64x2_f64x2(toCvt));
+
+    // Cheaper to duplicate lower32 (only need to check those)
+    __m128i dblToFltConvertTies = _mm_shuffle_epi32(
+        _mm_cmpeq_epi32(_mm_and_si128(dblCvtedBits, MANT_TRUNC_MASK), DBL_TIED_MANT),
+        _MM_SHUFFLE(0,0, 2,2)
+    );
+
+    __m128d powOf2BelowFltMant = _mm_castsi128_pd(_mm_andnot_si128(DBL_MANT_MASK, _mm_sub_epi64(dblCvtedBits, FLT_MANTDIG_IN_DBLEXPO)));
+    __m128i bitPosThatRoundedToTie = _convert_f64x2_i64x2(powOf2BelowFltMant); // Signed doesn't matter as >= 2^(63-24)
+
+    __m128i roundedDownOrEqual = _cmpEq_i64x2(_mm_and_si128(toCvt, bitPosThatRoundedToTie), bitPosThatRoundedToTie);
+
+    __m128i bitsBelowBitPos = _mm_sub_epi64(bitPosThatRoundedToTie, _mm_set1_epi64x(1)); // x-1
+    __m128i isExactlyTied = _cmpEq_i64x2(_mm_and_si128(toCvt, bitsBelowBitPos), _mm_setzero_si128());
+
+    // Rounded up to tie: -1ULP, Rounded down to tie: +1ULP (nothing if at tie without rounding)
+    dblCvtedBits = _mm_add_epi64(dblCvtedBits, _mm_andnot_si128(roundedDownOrEqual, dblToFltConvertTies));
+    dblCvtedBits = _mm_sub_epi64(dblCvtedBits, _mm_andnot_si128(isExactlyTied, _mm_and_si128(dblToFltConvertTies, roundedDownOrEqual) ));
+
+    return _mm_cvtpd_ps(_mm_castsi128_pd(dblCvtedBits));
+}
+
+NOINLINE __m128 thirdFusedSum_u64ToF32(__m128i u64toCvt) {
+    // No SIMD `u64 => float` convertion, so convert a third at a time then sum those together
+
+    const __m128i MANT21_MASK = _mm_set1_epi64x((1<<21) - 1);
+    const __m128i MANT_MASK_NOMSB = _mm_set1_epi32((1 << (FLT_MANT_DIG - 2)) - 1);
+    const __m128i FLT_SIGN_MASK = _mm_set1_epi32(1 << 31); 
+
+    const __m128 MID_OFFSET_TERM = _mm_set1_ps((float)(1ull << 21));
+    const __m128 HI_OFFSET_TERM =  _mm_set1_ps((float)(1ull << 42));
+
+
+    __m128 low = _mm_cvtepi32_ps(_mm_and_si128(u64toCvt, MANT21_MASK));
+    __m128 mid = _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi64(u64toCvt, 21), MANT21_MASK));
+    __m128 hi  = _mm_cvtepi32_ps(_mm_srli_epi64(u64toCvt, 21*2));
+
+    mid = _mm_mul_ps(mid, MID_OFFSET_TERM);
+    hi  = _mm_mul_ps(hi, HI_OFFSET_TERM);
+
+    // Adding all three values directly fails due to intermediate rounding
+    // so perform a fused-add-add using method from:
+    //      `Graillat & Muller (2025): hal-04575249v2`
+
+    // Fast2Sum (values differ in magnitude)
+    __m128 sum_lowMid = _mm_add_ps(low, mid);
+    __m128 error_lowMid = _mm_sub_ps(low, _mm_sub_ps(sum_lowMid, mid));
+
+    __m128 sum_total = _mm_add_ps(sum_lowMid, hi);
+    __m128 error_lm_hi = _mm_sub_ps(sum_lowMid, _mm_sub_ps(sum_total, hi));
+
+    // `error_lm_h` should always be larger or zero
+    __m128 error_total = _mm_add_ps(error_lowMid, error_lm_hi);
+    __m128 error_final = _mm_sub_ps(error_lowMid, _mm_sub_ps(error_total, error_lm_hi));
+
+
+    // `1 * 2**n`: zero mantissa, `3 * 2**n`: only MSB set
+    __m128i is1Or3XpowOf2 = _mm_cmpeq_epi32(_mm_and_si128(_mm_castps_si128(error_total), MANT_MASK_NOMSB), _mm_setzero_si128());
+    __m128 errorTotalNotExact = _mm_cmpneq_ps(error_final, _mm_setzero_ps());
+
+    __m128 needsCorrection = _mm_and_ps(_mm_castsi128_ps(is1Or3XpowOf2), errorTotalNotExact);
+
+    __m128i signsDifferMSB = _mm_and_si128(_mm_castps_si128(_mm_xor_ps(error_final, error_total)), FLT_SIGN_MASK);
+
+
+    // If a correction is needed, we have to scale by a term
+    // NoCorrection: `8/8` (no scaling)
+    __m128 correctionTerm = _mm_set1_ps(8.0f / 8.0f);
+
+    // SignsDiffers: `7/8`, SignsSame: `9/8`
+    __m128 correctionTermOffset = _mm_and_ps(_mm_set1_ps(1.0f / 8.0f), needsCorrection);
+
+    // Setting MSB subtracts rather then add
+    correctionTerm = _mm_add_ps(correctionTerm, _mm_or_ps(correctionTermOffset, _mm_castsi128_ps(signsDifferMSB)));
+
+
+    __m128 converted = _mm_add_ps(sum_total, _mm_mul_ps(correctionTerm, error_total));
+
+    return _mm_shuffle_ps(converted, _mm_setzero_ps(), _MM_SHUFFLE(0,0, 2,0));
+}
+
+NOINLINE __m128 thirdFusedSumA_u64ToF32(__m128i u64toCvt) {
+    // No SIMD `u64 => float` convertion, so convert a third at a time then sum those together
+
+    const __m128i MANT21_MASK = _mm_set1_epi64x((1<<21) - 1);
+    const __m128i DBL_NONTRUNC_MASK = _mm_set1_epi64x(~((1ull << (DBL_MANT_DIG - FLT_MANT_DIG)) - 1));
+    const __m128i DBL_ODDCVT_MANT = _mm_set1_epi64x(1ull << (DBL_MANT_DIG - FLT_MANT_DIG));
+
+    const __m128 MID_OFFSET_TERM = _mm_set1_ps((float)(1ull << 21));
+    const __m128 HI_OFFSET_TERM =  _mm_set1_ps((float)(1ull << 42));
+
+
+    __m128 low = _mm_cvtepi32_ps(_mm_and_si128(u64toCvt, MANT21_MASK));
+    __m128 mid = _mm_cvtepi32_ps(_mm_and_si128(_mm_srli_epi64(u64toCvt, 21), MANT21_MASK));
+    __m128 hi  = _mm_cvtepi32_ps(_mm_srli_epi64(u64toCvt, 21*2));
+
+    mid = _mm_mul_ps(mid, MID_OFFSET_TERM);
+    hi  = _mm_mul_ps(hi, HI_OFFSET_TERM);
+
+    low = _mm_shuffle_ps(low, _mm_setzero_ps(), _MM_SHUFFLE(0,0, 2,0));
+    mid = _mm_shuffle_ps(mid, _mm_setzero_ps(), _MM_SHUFFLE(0,0, 2,0));
+    hi  = _mm_shuffle_ps(hi,  _mm_setzero_ps(), _MM_SHUFFLE(0,0, 2,0));
+
+    // Adding all three values directly fails due to intermediate rounding
+    // so perform a fused-add-add using method from:
+    //      `Boldo & Melquiond (2009)`
+
+    // Fast2Sum (values differ in magnitude)
+    __m128 sum_lowMid = _mm_add_ps(low, mid);
+    __m128 error_lowMid = _mm_sub_ps(low, _mm_sub_ps(sum_lowMid, mid));
+
+    __m128 sum_total = _mm_add_ps(sum_lowMid, hi);
+    __m128 error_lm_hi = _mm_sub_ps(sum_lowMid, _mm_sub_ps(sum_total, hi));
+
+
+    __m128d dblErrorTotal = _mm_add_pd(_mm_cvtps_pd(error_lm_hi), _mm_cvtps_pd(error_lowMid));
+    __m128d dblTotalRoundDown = _mm_and_pd(dblErrorTotal, _mm_castsi128_pd(DBL_NONTRUNC_MASK));
+
+    __m128d addIsntExact = _mm_cmpneq_pd(dblErrorTotal, dblTotalRoundDown);
+    dblTotalRoundDown = _mm_or_pd(dblTotalRoundDown, _mm_and_pd(addIsntExact, _mm_castsi128_pd(DBL_ODDCVT_MANT)));
+
+    return _mm_add_ps(sum_total, _mm_cvtpd_ps(dblTotalRoundDown));
+}
+
+NOINLINE __m128 dblHalf2Sum_u64ToF32(__m128i u64toCvt) {
+
+    const __m128d MANT_AS_LOINT = _mm_set1_pd((double)(1ull << (DBL_MANT_DIG-1)));
+    const __m128d MANT_AS_HIINT = _mm_set1_pd(0x1p84); // MANT_BITS + 32
+
+    const __m128i EXPO_INTERLEAVE = _shuffleLoHi_i32x4(
+        _mm_castpd_si128(MANT_AS_LOINT), _MM_SHUFHALF(3, 1), _mm_castpd_si128(MANT_AS_HIINT), _MM_SHUFHALF(3, 1)
+    );
+
+    __m128i lohi_interleave = _mm_shuffle_epi32(u64toCvt, _MM_SHUFFLE(3,1, 2,0));
+
+    __m128d lo_magicExpo = _mm_castsi128_pd(_mm_unpacklo_epi32(lohi_interleave, EXPO_INTERLEAVE));
+    __m128d hi_magicExpo = _mm_castsi128_pd(_mm_unpackhi_epi32(lohi_interleave, EXPO_INTERLEAVE));
+
+    __m128d loCvted = _mm_sub_pd(lo_magicExpo, MANT_AS_LOINT);
+    __m128d hiCvted = _mm_sub_pd(hi_magicExpo, MANT_AS_HIINT);
+
+    // Fast2Sum
+    __m128d sum_loHi = _mm_add_pd(loCvted, hiCvted);
+    __m128d error_loHi = _mm_sub_pd(loCvted, _mm_sub_pd(sum_loHi, hiCvted));
+
+
+    // If the sum rounded to a value that would tie when converting,
+    // then a double-rounding error would occur
+
+    // Needlessly offsetting is only incorrect when it offsets to a tie
+    __m128i zeroOrNaNIfLSB = _mm_srai_epi32(_mm_slli_epi64(_mm_castpd_si128(sum_loHi), 63) , 31);
+
+    // NaN is always false, else compare with zero
+    __m128i hasNegError = _mm_castpd_si128(_mm_cmplt_pd(error_loHi, _mm_castsi128_pd(zeroOrNaNIfLSB)));
+    __m128i hasPosError = _mm_castpd_si128(_mm_cmpgt_pd(error_loHi, _mm_castsi128_pd(zeroOrNaNIfLSB)));
+
+    __m128i sumNoDoubleRound = _mm_castpd_si128(sum_loHi);
+    sumNoDoubleRound = _mm_add_epi64(sumNoDoubleRound, hasNegError);
+    sumNoDoubleRound = _mm_sub_epi64(sumNoDoubleRound, hasPosError);
+
+    return _mm_cvtpd_ps(_mm_castsi128_pd(sumNoDoubleRound));
+}
+
+NOINLINE __m128 dblHalf2SumA_u64ToF32(__m128i u64toCvt) {
+
+    const __m128d MANT_AS_LOINT = _mm_set1_pd((double)(1ull << (DBL_MANT_DIG-1)));
+    const __m128d MANT_AS_HIINT = _mm_set1_pd(0x1p84); // MANT_BITS + 32
+
+    const __m128i EXPO_INTERLEAVE = _shuffleLoHi_i32x4(
+        _mm_castpd_si128(MANT_AS_LOINT), _MM_SHUFHALF(3, 1), _mm_castpd_si128(MANT_AS_HIINT), _MM_SHUFHALF(3, 1)
+    );
+
+    __m128i lohi_interleave = _mm_shuffle_epi32(u64toCvt, _MM_SHUFFLE(3,1, 2,0));
+
+    __m128d lo_magicExpo = _mm_castsi128_pd(_mm_unpacklo_epi32(lohi_interleave, EXPO_INTERLEAVE));
+    __m128d hi_magicExpo = _mm_castsi128_pd(_mm_unpackhi_epi32(lohi_interleave, EXPO_INTERLEAVE));
+
+    __m128d loCvted = _mm_sub_pd(lo_magicExpo, MANT_AS_LOINT);
+    __m128d hiCvted = _mm_sub_pd(hi_magicExpo, MANT_AS_HIINT);
+
+    // Fast2Sum
+    __m128d sum_loHi = _mm_add_pd(loCvted, hiCvted);
+    __m128d error_loHi = _mm_sub_pd(loCvted, _mm_sub_pd(sum_loHi, hiCvted));
+
+
+    // If the sum rounded to a value that would tie when converting,
+    // then a double-rounding error would occur
+
+    __m128i errorMoreThanZeroMask = _mm_castpd_si128(_mm_cmpgt_pd(error_loHi, _mm_setzero_pd()));
+
+    // PosError: -1 + sign(+), NegError: 0 + sign(-), NoError: 0 + sign(+)
+    __m128i sumNegULPOffset = _mm_add_epi64(
+        errorMoreThanZeroMask, _mm_srli_epi64(_mm_castpd_si128(error_loHi), 63)
+    );
+
+    // Faster then only offsetting if it is already tied
+    __m128i offsetCantCauseTie = _mm_shuffle_epi32(
+        _mm_cmpeq_epi32( _mm_slli_epi32(_mm_castpd_si128(sum_loHi), 31), _mm_setzero_si128() ),
+        _MM_SHUFFLE(2,2, 0,0)
+    );
+
+    __m128d sumNoDoubleRound = _mm_castsi128_pd(
+        _mm_sub_epi64(_mm_castpd_si128(sum_loHi), _mm_and_si128(sumNegULPOffset, offsetCantCauseTie))
+    );
+
+    return _mm_cvtpd_ps(sumNoDoubleRound);
+}
+
+
+NOINLINE __m128 viaF80_u64ToF32(__m128i u64toCvt) {
+    static const float CORRECTION_LO[] = {0, 0x1p64f, 0, 0x1p64f};
+    static const float CORRECTION_HI[] = {0, 0, 0x1p64f, 0x1p64f};
+
+    int needsScale = _getMsb_i64x2(u64toCvt);
+
+    uint64_t low, high;
+    _mm_storeu_si64(&low, u64toCvt);
+    _mm_storeh_pi((__m64*)&high, _mm_castsi128_ps(u64toCvt));
+
+    union {float val; uint32_t asInt;} cvted[2];
+    cvted[0].val = (long double)(int64_t)low +  CORRECTION_LO[needsScale];
+    cvted[1].val = (long double)(int64_t)high + CORRECTION_HI[needsScale];
+
+    return _mm_castsi128_ps(_mm_cvtsi64_si128(
+        ((uint64_t)cvted[1].asInt << 32) | cvted[0].asInt
+    ));
+}
+
 NOINLINE __m128 compiler_u64ToF32(__m128i u64_toCvt) {
     uint64_t u64_array[2];
     _mm_store_si128((__m128i*)u64_array, u64_toCvt);
@@ -244,12 +486,20 @@ NOINLINE __m128 compiler_u64ToF32(__m128i u64_toCvt) {
     return _mm_setr_ps((float)u64_array[0], (float)u64_array[1], 0, 0);
 }
 
-
-
-
 // ===== Unsigned 64-bit int to float64 =====
 
 NOINLINE __m128d magicExpo_u64ToF64(__m128i u64_toCvt) {
+    /*
+    magicLow[0:63] =  u64[0:31] | double(2**BITS_IN_MANT)
+
+    magicHigh[0:63] = u64[32:63] | double(2**(BITS_IN_MANT+32))
+
+    tmpLow[0:63] =  doubleSub(magicLow,  2**BITS_IN_MANT)
+    tmpHigh[0:63] = doubleSub(magicHigh, 2**(BITS_IN_MANT+32))
+
+    return doubleAdd(tmpLow, tmpHigh)
+    */
+
     // Magic method based on clang (when converting a uint64 => double)
     const uint32_t MAGIC_EXP_LO = DBL_MAX_EXP + DBL_MANT_DIG - 2;
     const uint32_t MAGIC_EXP_HI = DBL_MAX_EXP + DBL_MANT_DIG+32 - 2;

@@ -17,6 +17,18 @@ NOINLINE __m128i scaleBitCombind_f32ToU32(__m128 f32_toCvt) {
     return _mm_or_si128(_mm_and_si128(scaledCvt, isNegMask), directCvt);
 }
 
+NOINLINE __m128i scale_f32ToU32(__m128 f32_toCvt) {
+    const __m128 OVERFLOW_THRESHOLD = _mm_set1_ps(1ull << 31);
+
+    // If input is too large to fit in signed int, scale so it does
+    __m128 willOverflowMask = _mm_cmpge_ps(f32_toCvt, OVERFLOW_THRESHOLD);
+    __m128 inputNoOverflow = _mm_sub_ps(f32_toCvt, _mm_and_ps(OVERFLOW_THRESHOLD, willOverflowMask));
+    __m128i scaledCvt = _mm_cvttps_epi32(inputNoOverflow);
+
+    // Scaling "removed" the MSB, so re-add it
+    return _mm_xor_si128(scaledCvt, _mm_slli_epi32(_mm_castps_si128(willOverflowMask), 31 ));
+}
+
 NOINLINE __m128i compiler_f32ToU32(__m128 f32_toCvt) {
     float f32_array[4];
     _mm_store_ps(f32_array, f32_toCvt);
@@ -142,7 +154,7 @@ NOINLINE __m128i scale_f64ToU32(__m128d f64_toCvt) {
     // If input is too large to fit in signed int, scale so it does
     __m128d willOverflowMask = _mm_cmpge_pd(f64_toCvt, OVERFLOW_THRESHOLD);
     __m128d inputNoOverflow = _mm_sub_pd(f64_toCvt, _mm_and_pd(OVERFLOW_THRESHOLD, willOverflowMask));
-    __m128i scaledCvt = _convert_f64x2_u32x4(inputNoOverflow);
+    __m128i scaledCvt = _mm_cvtpd_epi32(inputNoOverflow);
 
     // Scaling "removed" the MSB, so re-add it
     // "Align" lower two masks with the converted upper [0, mask1, mask1, mask0]
@@ -198,8 +210,7 @@ NOINLINE __m128i scaleBitCombind_f64ToU64(__m128d f64_toCvt) {
     return _mm_or_si128(_mm_and_si128(scaledCvt, isNegMask), directCvt);
 }
 
-// Converts 64-bit floats into unsigned 64-bit integers
-// Valid for inputs [INT64_MIN, UINT64_MAX] (negative inputs act like converting to signed, then casting to unsigned)
+
 NOINLINE __m128i scale_f64ToU64(__m128d f64_toCvt) {
     const __m128d OVERFLOW_THRESHOLD = _mm_set1_pd(1ull << 63);
 

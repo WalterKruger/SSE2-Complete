@@ -158,7 +158,7 @@ NOINLINE __m128i longDiv_u8(__m128i numerator, __m128i denominator) {
     for (int i = 8-1; i >= 0; i--) {
         remainder = _mm_add_epi8(remainder, remainder); // << 1 (no 8-bit shift)
         // remainder =| (numerator >> i) & 0x01
-        // [And sized shift works as we only keep the LSB]
+        // [Any sized shift works as we only keep the LSB]
         __m128i ithBit = _mm_and_si128( _mm_srl_epi32(numerator, _mm_cvtsi32_si128(i)), LSB_MASK );
         remainder = _mm_or_si128(remainder, ithBit);
 

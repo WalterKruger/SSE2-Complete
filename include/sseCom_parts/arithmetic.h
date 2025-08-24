@@ -102,7 +102,7 @@ __m128i _sqrt_u64x2(__m128i u64_radicand) {
     
     return _mm_loadu_si128((__m128i*)sqrts);
 
-    // This is actually a bit faster on newer CPUs (Zen3 & Cannon Lake/Goldmount plus)
+    // This is actually a bit faster on newer CPUs (Zen3 & Cannon Lake/Goldmount)
     // due to fast 64-bit division
     #else
 

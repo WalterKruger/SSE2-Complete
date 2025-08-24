@@ -13,6 +13,21 @@
 // The hard part is doing the truncation convertion to integer
 // which doesn't have direct hardware support until SSSE3
 
+NOINLINE __m128i fpu_compiler_u64(__m128i input) {
+    uint64_t u64_array[2], sqrts[2];
+    _mm_store_si128((__m128i*)u64_array, input);
+
+    for (size_t i=0; i<2; ++i) {
+        long double valAsFlt = (long double)u64_array[i];
+        
+        __asm__("fsqrt" : "+t" (valAsFlt));
+
+        sqrts[i] = (uint32_t)valAsFlt;
+    }
+    
+    return _mm_loadu_si128((__m128i*)sqrts);
+}
+
 // Use SSSE3 hardware instruction
 NOINLINE __m128i fpu_ssse3_u64(__m128i input) {
     uint64_t u64_array[2], sqrts[2];
@@ -148,6 +163,8 @@ NOINLINE __m128i fpu_intViaStoreA_u64(__m128i input) {
 // Storing as an int sets a FPU status flag indicating rounding direction
 // However, reading from this register is expensive!
 NOINLINE __m128i fpu_ctrlReg_u64(__m128i input) {
+    const int C1_POS = 9;
+
     uint64_t u64_array[2], sqrts[2], ctrlWords[2];
     _mm_store_si128((__m128i*)u64_array, input);
 
@@ -157,17 +174,24 @@ NOINLINE __m128i fpu_ctrlReg_u64(__m128i input) {
             "fsqrt                  ;"
         // An inexact store sets C1 (9th bit) flag depending on rounding direction
             "fistpll %[sqrt]      ;"
-            "fstsw   %[controlWord] ;"
-        : [sqrt] "=m" (sqrts[i]), [controlWord] "=m" (ctrlWords[i])
+            "fnstsw   %%ax;" // "fstsw   %[controlWord] ;"
+        : [sqrt] "=m" (sqrts[i]), [controlWord] "=a" (ctrlWords[i])
         : "t" ((long double)u64_array[i])
         : "st"
         );
     }
 
+    #if 1
     return _mm_set_epi64x(
-        sqrts[1] - ((ctrlWords[1] >> 9) & 1),
-        sqrts[0] - ((ctrlWords[0] >> 9) & 1)
+        sqrts[1] - ((ctrlWords[1] >> C1_POS) & 1),
+        sqrts[0] - ((ctrlWords[0] >> C1_POS) & 1)
     );
+    #else
+    return _mm_set_epi64x(
+        ( (int64_t)(ctrlWords[1] << (63 - C1_POS)) >> 63 ) + sqrts[1],
+        ( (int64_t)(ctrlWords[0] << (63 - C1_POS)) >> 63 ) + sqrts[0]
+    );
+    #endif
 }
 
 NOINLINE __m128i fpu_sqCheck_u64(__m128i input) {

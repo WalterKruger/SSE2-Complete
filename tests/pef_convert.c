@@ -32,7 +32,6 @@ int main() {
     #define PERF_FLOAT_TO_INT
     #define PERF_DOUBLE_TO_INT
 
-
     #if 0
     // NOTE: When converting INT_MAX to a float, it may cause it to be slightly larger (and thus out of range)...
     printf("Verifying correctness...\n");
@@ -99,6 +98,12 @@ int main() {
     printf("\nUnsigned 64-bit to float32: Time taken to calculate %llu results...\n", iterations);
     perfMessure_intFlt(scaleBranchless_u64ToF32, iterations, rand_ints);
     perfMessure_intFlt(scaleLin_u64ToF32, iterations, rand_ints);
+    perfMessure_intFlt(doubleRound_u64ToF32, iterations, rand_ints);
+    perfMessure_intFlt(thirdFusedSum_u64ToF32, iterations, rand_ints);
+    perfMessure_intFlt(thirdFusedSumA_u64ToF32, iterations, rand_ints);
+    perfMessure_intFlt(dblHalf2Sum_u64ToF32, iterations, rand_ints);
+    perfMessure_intFlt(dblHalf2SumA_u64ToF32, iterations, rand_ints);
+    perfMessure_intFlt(viaF80_u64ToF32, iterations, rand_ints);
     perfMessure_intFlt(compiler_u64ToF32, iterations, rand_ints);
     
     printf("\nUnsigned 64-bit to float64: Time taken to calculate %llu results...\n", iterations);
@@ -110,6 +115,7 @@ int main() {
 
     printf("\nFloat-32 to unsigned int32: Time taken to calculate %llu results...\n", iterations);
     perfMessure_fltInt(scaleBitCombind_f32ToU32, iterations, rand_flt_range32);
+    perfMessure_fltInt(scale_f32ToU32, iterations, rand_flt_range32);
     perfMessure_fltInt(compiler_f32ToU32, iterations, rand_flt_range32);
 
     printf("\nFloat-32 to signed int64: Time taken to calculate %llu results...\n", iterations);
