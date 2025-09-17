@@ -91,7 +91,7 @@ __m128i _cmpLss_i64x2(__m128i a, __m128i b) {
     __m128i difference = _mm_sub_epi64(a, b);
 
     // ...except when overflow (can only happen when signs differ)
-    __m128i result_MSB = _either_i128(aIsNeg_bIsPos_MSB, difference, signsDiffer_MSB);
+    __m128i result_MSB = _mm_or_si128(_mm_andnot_si128(signsDiffer_MSB, difference), aIsNeg_bIsPos_MSB);
     
     return _fillWithMSB_i64x2(result_MSB);
 }
