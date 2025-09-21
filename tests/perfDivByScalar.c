@@ -49,19 +49,19 @@ int main() {
 
     #ifdef PERF_DIV
 
-    printf("\nDivision unsigned 8-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nDivision unsigned 8-bit: Time taken to calculate %zu results...\n", iterations);
     divPerfNormal(_div_u8x16, _mm_set1_epi8);
     divPerfMagic(_divP_u8x16, _getDivMagic_set1_u8x16, sseCom_divMagic_u8);
 
-    printf("\nDivision unsigned 16-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nDivision unsigned 16-bit: Time taken to calculate %zu results...\n", iterations);
     divPerfNormal(_div_u16x8, _mm_set1_epi16);
     divPerfMagic(_divP_u16x8, _getDivMagic_set1_u16x8, sseCom_divMagic_u16);
 
-    printf("\nDivision unsigned 32-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nDivision unsigned 32-bit: Time taken to calculate %zu results...\n", iterations);
     divPerfNormal(_div_u32x4, _mm_set1_epi32);
     divPerfMagic(_divP_u32x4, _getDivMagic_set1_u32x4, sseCom_divMagic_u32);
 
-    printf("\nDivision unsigned 64-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nDivision unsigned 64-bit: Time taken to calculate %zu results...\n", iterations);
     divPerfNormal(_div_u64x2, _mm_set1_epi64x);
 
     #endif
@@ -70,22 +70,22 @@ int main() {
 
     #ifdef PERF_MOD
 
-    printf("\nModulo unsigned 8-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nModulo unsigned 8-bit: Time taken to calculate %zu results...\n", iterations);
     modPerfNormal(_mod_u8x16, _mm_set1_epi8);
     modPerfMagic(_modP_u8x16, _getDivMagic_set1_u8x16, sseCom_divMagic_u8, _mm_set1_epi8);
 
-    printf("\nModulo unsigned 16-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nModulo unsigned 16-bit: Time taken to calculate %zu results...\n", iterations);
     modPerfNormal(_mod_u16x8, _mm_set1_epi16);
-    modPerfMagic(_modP_u16x8, _getDivMagic_set1_u16x8, sseCom_divMagic_u16, _mm_set1_epi16);
+    divPerfMagic(_modP_u16x8, _getDivMagic_set1_u16x8, sseCom_divMagic_u16); // Div as no denom arg
 
-    printf("\nModulo unsigned 32-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nModulo unsigned 32-bit: Time taken to calculate %zu results...\n", iterations);
     modPerfNormal(_mod_u32x4, _mm_set1_epi32);
     modPerfMagic(_modP_u32x4, _getDivMagic_set1_u32x4, sseCom_divMagic_u32, _mm_set1_epi32);
 
-    printf("\nModulo unsigned 64-bit: Time taken to calculate %llu results...\n", iterations);
+    printf("\nModulo unsigned 64-bit: Time taken to calculate %zu results...\n", iterations);
     modPerfNormal(_mod_u64x2, _mm_set1_epi64x);
 
     #endif
 
-    //char dummy; printf("\nEnd of test..."); scanf("\n%c", &dummy);
+    char dummy; printf("\nEnd of test..."); scanf("\n%c", &dummy);
 }

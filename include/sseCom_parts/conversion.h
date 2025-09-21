@@ -125,14 +125,14 @@ __m128i _satConvert_u32x4_u16x8(__m128i u32LoHalf, __m128i u32HiHalf) {
 // ====== 64-bit ======
 
 // Truncade 64-bit elements to 32-bit, return first argument's elements in low half, the second in high
-SSECOM_INLINE __m128i _trunc_u64x4_u32x4(__m128i u64LoHalf, __m128i u64HiHalf) {
+SSECOM_INLINE __m128i _trunc_u64x2_u32x4(__m128i u64LoHalf, __m128i u64HiHalf) {
     return _shuffleLoHi_i32x4(u64LoHalf, _MM_SHUFHALF(2,0), u64HiHalf, _MM_SHUFHALF(2,0));
 }
 
 // Convert unsigned 64-bit integers into 32-bit via unsigned saturation
 // (When value is too large to fit, it is clamped to UINT32_MAX)
-SSECOM_INLINE __m128i _satConvert_u64x4_u32x4(__m128i u64LoHalf, __m128i u64HiHalf) {
-    __m128i truncNoSat = _trunc_u64x4_u32x4(u64LoHalf, u64HiHalf);
+SSECOM_INLINE __m128i _satConvert_u64x2_u32x4(__m128i u64LoHalf, __m128i u64HiHalf) {
+    __m128i truncNoSat = _trunc_u64x2_u32x4(u64LoHalf, u64HiHalf);
 
     __m128i partsThatCauseSat = _shuffleLoHi_i32x4(
         u64LoHalf, _MM_SHUFHALF(3,1), u64HiHalf, _MM_SHUFHALF(3,1)
@@ -299,7 +299,8 @@ __m128 _convert_u64x2_f32x4(__m128i u64_toCvt) {
     const __m128d MANT_AS_HIINT = _mm_set1_pd(0x1p84); // MANT_BITS + 32
 
     const __m128i EXPO_INTERLEAVE = _shuffleLoHi_i32x4(
-        _mm_castpd_si128(MANT_AS_LOINT), _MM_SHUFHALF(3, 1), _mm_castpd_si128(MANT_AS_HIINT), _MM_SHUFHALF(3, 1)
+        _mm_castpd_si128(MANT_AS_LOINT), _MM_SHUFHALF(1, 1),
+        _mm_castpd_si128(MANT_AS_HIINT), _MM_SHUFHALF(1, 1)
     );
 
     __m128i lohi_interleave = _mm_shuffle_epi32(u64_toCvt, _MM_SHUFFLE(3,1, 2,0));

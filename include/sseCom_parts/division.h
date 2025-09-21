@@ -282,66 +282,55 @@ __m128i _mod_u16x8(__m128i numerator, __m128i denominator) {
 }
 
 
-/*  For div/mod using a magic num, we need to calculate "mulhi_u32(a_u16, b_u32)"
-    However, SSE2 doesn't have a high 32-bit multiplication instruction (and will need zero extending + recombining)
-    Breaking the magic number into two parts is faster as we can do:
-        mulhi_u16(a, b.hi) + sumOverflows( mullo_u16(a, b.hi), mulhi_u16(a, b.lo) )
+/*
+    Normally a 16-bit reciprocal isn't accurate enough to calculate a quotient
+    ...but `UMAX_16 / d` can only be off by -1 (when "remainder" >= d) [verified u8 & u16]
+
+    ModP/divP performs similar to double-width but precomp only needs single width div (>2x faster!)
 */
-struct sseCom_divMagic_u16 {__m128i lo16Bits; __m128i hi16Bits;};
+struct sseCom_divMagic_u16 {__m128i RECIP; __m128i DENOM;};
 
 
 // Creates the magic numbers used in the `divP` function
-// NOTE: The divisor has to be greater than 1
-struct sseCom_divMagic_u16 _getDivMagic_u16x8(__m128i divisor) {
-
-    __m128i div_lo = _zeroExtendLo_u16x8_i32x4(divisor);
-    __m128i div_hi = _zeroExtendHi_u16x8_i32x4(divisor);
-
-    // M = (DWORD_MAX / d) + 1
-    __m128i magic_lo = _mm_add_epi32( _div_u32x4(_mm_set1_epi32(UINT32_MAX), div_lo), _mm_set1_epi32(1) );
-    __m128i magic_hi = _mm_add_epi32( _div_u32x4(_mm_set1_epi32(UINT32_MAX), div_hi), _mm_set1_epi32(1) );
-
+struct sseCom_divMagic_u16 _getDivMagic_u16x8(__m128i divisors) {
     struct sseCom_divMagic_u16 MAGIC_NUMS = {
-        .lo16Bits = _trunc_u32x4_u16x8(magic_lo, magic_hi),
-        .hi16Bits = _trunc_u32x4_u16x8(_mm_srli_epi32(magic_lo, 16), _mm_srli_epi32(magic_hi, 16))
+        .RECIP = _div_u16x8(_setone_i128(), divisors),
+        .DENOM = divisors
     };
 
     return MAGIC_NUMS;
 }
 
 // Creates the magic numbers used in the division p function
-// NOTE: The divisor has to be greater than 1
 SSECOM_INLINE struct sseCom_divMagic_u16 _getDivMagic_set_u16x8(
     uint16_t divisor8, uint16_t divisor7, uint16_t divisor6, uint16_t divisor5,
     uint16_t divisor4, uint16_t divisor3, uint16_t divisor2, uint16_t divisor1
     ) {
     
-    uint32_t magic1 = UINT32_MAX / divisor1 + 1;
-    uint32_t magic2 = UINT32_MAX / divisor2 + 1;
-    uint32_t magic3 = UINT32_MAX / divisor3 + 1;
-    uint32_t magic4 = UINT32_MAX / divisor4 + 1;
-    uint32_t magic5 = UINT32_MAX / divisor5 + 1;
-    uint32_t magic6 = UINT32_MAX / divisor6 + 1;
-    uint32_t magic7 = UINT32_MAX / divisor7 + 1;
-    uint32_t magic8 = UINT32_MAX / divisor8 + 1;
+    uint16_t rcp1 = UINT16_MAX / divisor1;
+    uint16_t rcp2 = UINT16_MAX / divisor2;
+    uint16_t rcp3 = UINT16_MAX / divisor3;
+    uint16_t rcp4 = UINT16_MAX / divisor4;
+    uint16_t rcp5 = UINT16_MAX / divisor5;
+    uint16_t rcp6 = UINT16_MAX / divisor6;
+    uint16_t rcp7 = UINT16_MAX / divisor7;
+    uint16_t rcp8 = UINT16_MAX / divisor8;
     
     struct sseCom_divMagic_u16 MAGIC_NUMS;
 
-    MAGIC_NUMS.lo16Bits = _mm_set_epi16(
-        (uint16_t)magic8, (uint16_t)magic7, (uint16_t)magic6, (uint16_t)magic5,
-        (uint16_t)magic4, (uint16_t)magic3, (uint16_t)magic2, (uint16_t)magic1
+    MAGIC_NUMS.RECIP = _mm_set_epi16(
+        rcp8, rcp7, rcp6, rcp5, rcp4, rcp3, rcp2, rcp1
     );
 
-    MAGIC_NUMS.hi16Bits = _mm_set_epi16(
-        magic8 >> 16, magic7 >> 16, magic6 >> 16, magic5 >> 16,
-        magic4 >> 16, magic3 >> 16, magic2 >> 16, magic1 >> 16
+    MAGIC_NUMS.DENOM = _mm_set_epi16(
+        divisor8, divisor7, divisor6, divisor5,
+        divisor4, divisor3, divisor2, divisor1
     );
 
     return MAGIC_NUMS;
 }
 
 // Creates the magic numbers used in the division p function
-// NOTE: The divisor has to be greater than 1
 SSECOM_INLINE struct sseCom_divMagic_u16 _getDivMagic_setr_u16x8(
     uint16_t divisor1, uint16_t divisor2, uint16_t divisor3, uint16_t divisor4,
     uint16_t divisor5, uint16_t divisor6, uint16_t divisor7, uint16_t divisor8
@@ -352,71 +341,35 @@ SSECOM_INLINE struct sseCom_divMagic_u16 _getDivMagic_setr_u16x8(
 }
 
 // Creates the magic numbers used in the division p function
-// NOTE: The divisor has to be greater than 1
 SSECOM_INLINE struct sseCom_divMagic_u16 _getDivMagic_set1_u16x8(uint16_t divisor) {
-    uint32_t magic = (uint32_t)UINT32_MAX / divisor + 1;
-
-    struct sseCom_divMagic_u16 MAGIC_NUM = 
-        {.lo16Bits = _mm_set1_epi16((uint16_t)magic), .hi16Bits =  _mm_set1_epi16(magic >> 16)};
+    struct sseCom_divMagic_u16 MAGIC_NUM = {
+        .RECIP = _mm_set1_epi16(UINT16_MAX / divisor), .DENOM =  _mm_set1_epi16(divisor)
+    };
     
     return MAGIC_NUM;
 }
 
 // Divides 8 unsigned 16-bit integers using a precomputed magic number
-__m128i _divP_u16x8(__m128i u16_toDiv, struct sseCom_divMagic_u16 *MAGIC) {
-    // Technique from: arXiv:1902.01961 (Lemire et al, 2019) 
-    // (u16)(n / d) = (u32)(UINT32_MAX / d + 1) * n >> 32
+__m128i _divP_u16x8(__m128i numerator, struct sseCom_divMagic_u16 *MAGIC) {
+    // u16(n / d) = n * (MAX_16 / d) + (remainder > d)
 
-    // We only need the high 16-bits of mulhi_u32(toDiv_u16, MAGIC_u32)
-    // a_u16 * b_u32 =
-    // mullo(a, b.lo)   mulhi(a, b.lo)                  +
-    //                  mullo(a, b.hi)  mulhi(a, b.hi)
-    __m128i toDiv_MLo = _mm_mulhi_epu16(u16_toDiv, MAGIC->lo16Bits);
-    __m128i toDiv_MHi = _mm_mullo_epi16(u16_toDiv, MAGIC->hi16Bits);
+    __m128i almostQuot = _mm_mulhi_epu16(numerator, MAGIC->RECIP);
+    __m128i almostRem = _mm_sub_epi16(numerator, _mm_mullo_epi16(almostQuot, MAGIC->DENOM));
 
-    __m128i overflow_to_HiLo = _cmpGrt_u16x8( toDiv_MLo, _mm_add_epi16(toDiv_MLo, toDiv_MHi) );
-
-    // Add one (a - 0xFFFF = a + 1)
-    __m128i product_HiLo = _mm_sub_epi16( _mm_mulhi_epu16(u16_toDiv, MAGIC->hi16Bits), overflow_to_HiLo );
-
-    return product_HiLo;
+    // If `rem >= d`, the quotient was one off
+    return _mm_sub_epi16(almostQuot, _cmpGrtEq_u16x8(almostRem, MAGIC->DENOM));
 }
 
-// Calculates the modulo (a % d) of 8 unsigned 16-bit intergers using a precomputed magic number
-__m128i _modP_u16x8(__m128i u16_toDiv, struct sseCom_divMagic_u16 *MAGIC, __m128i u16_divisors) {
-    #if 0
-
-    // Technique from: arXiv:1902.01961 (Lemire et al, 2019) 
-    // (u16)(n % d) = (u16)HI_32( LO_32(M * n) * d )
-
-    // mulLo_u32(a_u16, b_u32) =
-    //      mulhi(a, b.lo)  mullo(a, b.lo)
-    //    + mullo(a, b.hi)
-    __m128i lowBits_lo = _mm_mullo_epi16(u16_toDiv, MAGIC->lo16Bits);
-    __m128i lowBits_hi = _mm_add_epi16(_mm_mullo_epi16(u16_toDiv, MAGIC->hi16Bits), _mm_mulhi_epu16(u16_toDiv, MAGIC->lo16Bits));
+// Calculates the modulo (n % d) of 8 unsigned 16-bit intergers using a precomputed magic number
+__m128i _modP_u16x8(__m128i numerator, struct sseCom_divMagic_u16 *MAGIC) {
+    __m128i almostQuot = _mm_mulhi_epu16(numerator, MAGIC->RECIP);
+    __m128i almostRem = _mm_sub_epi16(numerator, _mm_mullo_epi16(almostQuot, MAGIC->DENOM));
     
-    // We only need the high 16-bits of mulhi_u32(divisor_u16, lowBits_u32)
-    // a_u16 * b_u32 =
-    //      mullo(a, b.lo)  mulhi(a, b.lo)                  +
-    //                      mullo(a, b.hi)  mulhi(a, b.hi)
-    __m128i lo_hi = _mm_mulhi_epu16(lowBits_lo, u16_divisors);
-    __m128i hi_lo = _mm_mullo_epi16(lowBits_hi, u16_divisors);
-    __m128i hi_hi = _mm_mulhi_epu16(lowBits_hi, u16_divisors);
+    // Unsigned underflow is always larger
+    __m128i dIfQuotTooSmall = _mm_subs_epu16(almostRem, _mm_sub_epi16(almostRem, MAGIC->DENOM));
 
-    __m128i overflow_to_hihi = _cmpGrt_u16x8(lo_hi, _mm_add_epi16(lo_hi, hi_lo));
-
-    // Add one if overflow (a - 0xFFFF = a + 1)
-    __m128i product_hi16 = _mm_sub_epi16(hi_hi, overflow_to_hihi);
-    return product_hi16;
-
-    #else
-    // (u16)(n % d) = (u16)HI_32( LO_32(M * n) * d )
-    // Faster to do: n - DIV(n, M) * d, as don't need to do double word low mul.
-    __m128i quotent = _divP_u16x8(u16_toDiv, MAGIC);
-
-    return _mm_sub_epi16(u16_toDiv, _mm_mullo_epi16(quotent, u16_divisors));
-
-    #endif
+    // If `rem >= d`, the quotient was one off
+    return _mm_sub_epi16(almostRem, dIfQuotTooSmall);
 }
 
 

@@ -1,5 +1,5 @@
 #ifndef SSE_COM_H
-#define SSE_COM_H 10400
+#define SSE_COM_H 10500
 
 
 #include "sseCom_parts/_common.h"
