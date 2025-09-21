@@ -351,7 +351,7 @@ SSECOM_INLINE struct sseCom_divMagic_u16 _getDivMagic_set1_u16x8(uint16_t diviso
 
 // Divides 8 unsigned 16-bit integers using a precomputed magic number
 __m128i _divP_u16x8(__m128i numerator, struct sseCom_divMagic_u16 *MAGIC) {
-    // u16(n / d) = n * (MAX_16 / d) + (remainder > d)
+    // u16(n / d) = HI16(n * (MAX_16 / d)) + (remainder > d)
 
     __m128i almostQuot = _mm_mulhi_epu16(numerator, MAGIC->RECIP);
     __m128i almostRem = _mm_sub_epi16(numerator, _mm_mullo_epi16(almostQuot, MAGIC->DENOM));
