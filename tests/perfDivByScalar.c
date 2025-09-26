@@ -33,6 +33,8 @@
 #define modPerfNormal(divFunc, numeFunc) _divPerfBase(divFunc, numeFunc, __m128i, , NON)
 #define modPerfMagic(divFunc, numeFunc, denomType, deomBroad) _divPerfBase(divFunc, numeFunc, struct denomType, &, COMA(deomBroad))
 
+
+
 int main() {
 
     #define PERF_DIV
@@ -63,6 +65,7 @@ int main() {
 
     printf("\nDivision unsigned 64-bit: Time taken to calculate %zu results...\n", iterations);
     divPerfNormal(_div_u64x2, _mm_set1_epi64x);
+    divPerfMagic(_divP_u64x2, _getDivMagic_set1_u64x2, sseCom_divMagic_u64);
 
     #endif
 
@@ -84,6 +87,7 @@ int main() {
 
     printf("\nModulo unsigned 64-bit: Time taken to calculate %zu results...\n", iterations);
     modPerfNormal(_mod_u64x2, _mm_set1_epi64x);
+    divPerfMagic(_modP_u64x2, _getDivMagic_set1_u64x2, sseCom_divMagic_u64); // Div as no denom arg
 
     #endif
 

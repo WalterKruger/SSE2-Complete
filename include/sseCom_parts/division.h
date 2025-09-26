@@ -5,6 +5,26 @@
 #include "compare.h"
 #include "multiply.h"
 
+// For the 64-bit precomputed functions
+#ifdef _MSC_VER
+    // MSVC fails to optimize increment without an intrinsic
+    // ...and doesn't properly use the subtraction's borrow flag
+    #include <intrin.h>
+    #define SSECOM_CONDINC(resPtr, cond, toIncrement) _subborrow_u64(!(cond), toIncrement, UINT64_MAX, resPtr)
+    #define SSECOM_MULHI64(a, b) __umulh(a, b)
+    #define SSECOM_SUBIFNOUNDERFLOW64(a, b) ( ((a)-(b) < a)? ((a)-(b)) : (a) )
+#else
+    #define SSECOM_CONDINC(resPtr, cond, toIncrement) *(resPtr) = (toIncrement) + (cond) 
+    #define SSECOM_MULHI64(a, b) (((__uint128_t)(a) * (b)) >> 64)
+    #define SSECOM_SUBIFNOUNDERFLOW64(a, b) \
+    ({\
+        unsigned long long a_sub_b;\
+        int underflows = __builtin_usubll_overflow(a, b, &a_sub_b);\
+        (underflows)? (a) : (a_sub_b);\
+    })
+#endif
+
+
 
 // `getDivMagic` needs double word division
 __m128i _div_u16x8(__m128i, __m128i);
@@ -517,7 +537,7 @@ __m128i _divP_u32x4(__m128i numerator, struct sseCom_divMagic_u32 *magic) {
     // Technique from: arXiv:1902.01961 (Lemire et al, 2019)
     // (u32)(n / d) = (UINT64_MAX / d + 1) * n >> 64
 
-    // mulhi(a_u32, b_u64) = ( mulfull(a_u32, b.lo) >> 32) + mulfull(a_u32, b.hi) ) >> 32
+    // mulhi(a_u32, b_u64) = ( ( mulfull(a_u32, b.lo) >> 32) + mulfull(a_u32, b.hi) ) >> 32
     __m128i even_lo = _mm_mul_epu32(numerator, magic->lo32_even);
     __m128i even_hi = _mm_mul_epu32(numerator, magic->hi32_even);
     __m128i even_res_hi64 = _mm_add_epi64(_mm_srli_epi64(even_lo, 32), even_hi);
@@ -568,7 +588,8 @@ __m128i _div_u64x2(__m128i numerator, __m128i denominator) {
     return _mm_unpacklo_epi64(quot_lo_vec, quot_hi_vec);
 }
 
-// !!EXPENSIVE AVOID USING!! Divides each signed 64-bit integers by the corresponding signed 64-bit divisor
+// !!EXPENSIVE!! Divides each signed 64-bit integers by the corresponding signed 64-bit divisor
+// NOTE: `divP` is much faster if you repeatedly reuse the same divisor vector or it is known at compile time
 __m128i _div_i64x2(__m128i numerator, __m128i denominator) {
     // Statement order use to produce better asm output
     int64_t nume_lo = _mm_cvtsi128_si64(numerator);
@@ -591,6 +612,7 @@ __m128i _div_i64x2(__m128i numerator, __m128i denominator) {
 }
 
 // !!EXPENSIVE!! Calculate the remainder (n%d) after dividing each unsigned 64-bit integers by the corresponding unsigned 64-bit divisor
+// NOTE: `modP` is much faster if you repeatedly reuse the same divisor vector or it is known at compile time
 __m128i _mod_u64x2(__m128i numerator, __m128i denominator) {
     // Statement order use to produce better asm output
     uint64_t nume_lo = _mm_cvtsi128_si64(numerator);
@@ -611,3 +633,93 @@ __m128i _mod_u64x2(__m128i numerator, __m128i denominator) {
 
     return _mm_unpacklo_epi64(mod_lo_vec, mod_hi_vec);
 }
+
+
+// Need scalar high multiply & subborrow intrinsics for best performance
+#if (defined(__SIZEOF_INT128__) && defined(__has_builtin)) || defined(_MSC_VER)
+
+// Few 64-bit SIMD instructions, so faster to use scalar operations
+struct sseCom_divMagic_u64 {uint64_t rcpLo; uint64_t rcpHi; uint64_t denomLo; uint64_t denomHi;};
+
+// Creates the magic numbers used in the division p function
+struct sseCom_divMagic_u64 _getDivMagic_u64x2(__m128i divisors) {
+    uint64_t denom_lo = _mm_cvtsi128_si64(divisors);
+    __m128i denom_hi_vec = _mm_unpackhi_epi64(divisors, divisors);
+
+    uint64_t quot_lo = UINT64_MAX / denom_lo;
+
+    uint64_t denom_hi = _mm_cvtsi128_si64(denom_hi_vec);
+    uint64_t quot_hi = UINT64_MAX / denom_hi;
+
+    return (struct sseCom_divMagic_u64){
+        .rcpLo = quot_lo, .rcpHi = quot_hi,
+        .denomLo = denom_lo, .denomHi = denom_hi
+    };
+}
+
+// Creates the magic numbers used in the division p function
+SSECOM_INLINE struct sseCom_divMagic_u64 _getDivMagic_set_u64x2(uint64_t divisor2, uint64_t divisor1) {
+    return (struct sseCom_divMagic_u64){
+        .rcpLo = UINT64_MAX / divisor1,
+        .rcpHi = UINT64_MAX / divisor2,
+        .denomLo = divisor1, .denomHi = divisor2
+    };
+}
+
+// Creates the magic numbers used in the division p function
+SSECOM_INLINE struct sseCom_divMagic_u64 _getDivMagic_setr_u64x2(uint64_t divisor1, uint64_t divisor2) {
+    return _getDivMagic_set_u64x2(divisor2, divisor1);
+}
+
+// Creates the magic numbers used in the division p function
+SSECOM_INLINE struct sseCom_divMagic_u64 _getDivMagic_set1_u64x2(uint64_t x) {
+    uint64_t rcp = UINT64_MAX / x;
+
+    return (struct sseCom_divMagic_u64){
+        .rcpLo = rcp, .rcpHi = rcp,
+        .denomLo = x, .denomHi = x
+    };
+};
+
+// Divides 2 unsigned 64-bit integers using a precomputed magic number
+__m128i _divP_u64x2(__m128i nume, struct sseCom_divMagic_u64 *MAGIC) {
+    uint64_t nume_lo = _mm_cvtsi128_si64(nume);
+    uint64_t nume_hi = _mm_cvtsi128_si64(_mm_shuffle_epi32(nume, _MM_SHUFFLE(3,2,3,2)));
+
+    uint64_t almostQuot_lo = SSECOM_MULHI64(nume_lo, MAGIC->rcpLo);
+    uint64_t almostQuot_hi = SSECOM_MULHI64(nume_hi, MAGIC->rcpHi);
+
+    uint64_t almostRem_lo = nume_lo - almostQuot_lo * MAGIC->denomLo;
+    uint64_t almostRem_hi = nume_hi - almostQuot_hi * MAGIC->denomHi;
+    
+    uint64_t quot_lo;
+    uint64_t quot_hi;
+    SSECOM_CONDINC(&quot_lo, almostRem_lo >= MAGIC->denomLo, almostQuot_lo);
+    SSECOM_CONDINC(&quot_hi, almostRem_hi >= MAGIC->denomHi, almostQuot_hi);
+
+    return _mm_unpacklo_epi64(_mm_cvtsi64_si128(quot_lo), _mm_cvtsi64_si128(quot_hi));
+}
+
+// Calculates the modulo (n % d) of 2 unsigned 64-bit intergers using a precomputed magic number
+__m128i _modP_u64x2(__m128i nume, struct sseCom_divMagic_u64 *MAGIC) {
+    uint64_t nume_lo = _mm_cvtsi128_si64(nume);
+    uint64_t nume_hi = _mm_cvtsi128_si64(_mm_shuffle_epi32(nume, _MM_SHUFFLE(3,2,3,2)));
+
+    uint64_t almostQuot_lo = SSECOM_MULHI64(nume_lo, MAGIC->rcpLo);
+    uint64_t almostQuot_hi = SSECOM_MULHI64(nume_hi, MAGIC->rcpHi);
+
+    uint64_t almostRem_lo = nume_lo - almostQuot_lo * MAGIC->denomLo;
+    uint64_t almostRem_hi = nume_hi - almostQuot_hi * MAGIC->denomHi;
+    
+    // if remainder > denom, quotent +1    {nume - (almostQuot + 1) * denom}
+    uint64_t rem_lo = SSECOM_SUBIFNOUNDERFLOW64(almostRem_lo, MAGIC->denomLo);
+    uint64_t rem_hi = SSECOM_SUBIFNOUNDERFLOW64(almostRem_hi, MAGIC->denomHi);
+
+    return _mm_unpacklo_epi64(_mm_cvtsi64_si128(rem_lo), _mm_cvtsi64_si128(rem_hi));
+}
+
+#endif
+
+#undef SSECOM_MULHI64
+#undef SSECOM_CONDINC
+#undef SSECOM_SUBIFNOUNDERFLOW64
