@@ -301,10 +301,12 @@ NOINLINE __m128i directBitByBitR_8(__m128i toShift, __m128i amount) {
     return toShift;
 }
 
+
 NOINLINE __m128i directBitByBitAR_8(__m128i toShift, __m128i amount) {
 
     // Element size doesn't matter
     amount = _mm_slli_epi16(amount, 8-3);
+    __m128i shiftBy2_2ndMSB = _mm_and_si128(amount, _mm_set1_epi8(1<<6));
 
     toShift = _either_i128(_shiftR_u8x16(toShift,1<<2), toShift, _fillWithMSB_i8x16(amount));
     amount = _mm_add_epi8(amount,amount);
@@ -312,8 +314,16 @@ NOINLINE __m128i directBitByBitAR_8(__m128i toShift, __m128i amount) {
     // avg(a,b): (a + b + 1) >> 1
     // x - ceil(x/2) = x>>1
     __m128i shiftBy2 = _fillWithMSB_i8x16(amount);
+    #if 0
     toShift = _mm_sub_epi8(toShift, _mm_and_si128(shiftBy2, _mm_avg_epu8(toShift, _mm_setzero_si128())));
     toShift = _mm_sub_epi8(toShift, _mm_and_si128(shiftBy2, _mm_avg_epu8(toShift, _mm_setzero_si128())));
+    #else
+    // (shiftBy2)? (x + 0x100) >> 1 : ((x << 1) + 1) >> 1 
+    __m128i maxOrToShift = _mm_or_si128(shiftBy2, toShift);
+    toShift = _mm_avg_epu8( _mm_avg_epu8(toShift, maxOrToShift), maxOrToShift);
+    toShift = _mm_add_epi8(toShift, shiftBy2_2ndMSB); // Shifting added two MSBs
+
+    #endif
     amount = _mm_add_epi8(amount,amount);
 
     __m128i ceilDiv2 = _mm_avg_epu8(toShift, _mm_setzero_si128());
@@ -340,7 +350,51 @@ NOINLINE __m128i repeatedHalfR_8(__m128i toShift, __m128i amount) {
     return partialShift;
 }
 
+NOINLINE __m128i repeatedHalfAR_8(__m128i toShift, __m128i amount) {
 
+    amount = _mm_and_si128(amount, _mm_set1_epi8(0b111));
+
+    __m128i partialShift = toShift;
+    __m128i truncatedLength = _mm_set1_epi8(1);
+
+    for (size_t i=0; i < 7; i++) {
+        // avg(a,b) = (a + b + 1) >> 1      avg(a,0xff) = (a + 0x100) >> 1
+        __m128i needsShift = _mm_cmpgt_epi8(amount, _mm_setzero_si128());
+
+        partialShift = _mm_avg_epu8(partialShift, _mm_andnot_si128(needsShift, partialShift));
+        truncatedLength = _mm_add_epi8(truncatedLength, _mm_and_si128(needsShift, truncatedLength));
+
+        amount = _mm_add_epi8(amount, _setone_i128());
+    }
+
+    // If any bits where truncated, the resulted was rounded up!
+    __m128i truncatedBits = _mm_and_si128(toShift, _mm_add_epi8(truncatedLength, _setone_i128()));
+    return _mm_add_epi8(partialShift, _mm_cmpgt_epi8(truncatedBits, _mm_setzero_si128()));
+}
+
+
+
+NOINLINE __m128i repeatedHalfArithmeticShift_8(__m128i toShift, __m128i amount) {
+
+    amount = _mm_and_si128(amount, _mm_set1_epi8(0b111));
+
+    __m128i partialShift = toShift;
+    __m128i maskToRemMSB = _mm_or_si128(toShift, _mm_set1_epi8(0b01111111));
+
+    for (size_t i=0; i < 7; i++) {
+        // avg(a,b) = (a + b + 1) >> 1      avg(a,0xff) = (a + 0x100) >> 1
+        __m128i needsShift = _mm_cmpgt_epi8(amount, _mm_setzero_si128());
+        partialShift = _mm_avg_epu8(partialShift, _mm_or_si128(needsShift, partialShift));
+
+        // Avg sets the MSB. Only keep if input was set
+        partialShift = _mm_and_si128(partialShift, maskToRemMSB);
+
+        amount = _mm_add_epi8(amount, _setone_i128());
+    }
+
+    // Each averaging shifts in a set bit
+    return partialShift;
+}
 
 
 
@@ -597,26 +651,26 @@ NOINLINE __m128i directBitByBit_16(__m128i toShift, __m128i amount) {
 
 
 NOINLINE __m128i powOf2Float_16(__m128i toShift, __m128i amount) {
-    const __m128 ONE_FLT = _mm_set1_ps(1.0f);
+    const union {float asVal; uint32_t bitRep;} ONE_FLT = {1.0f};
 
-    #if 0
-    amount = _mm_and_si128(amount, _mm_set1_epi16(0b1111));
 
-    __m128i amount_lo = _zeroExtendLo_u16x8_i32x4(amount);
-    __m128i amount_hi = _zeroExtendHi_u16x8_i32x4(amount);
-
-    __m128i expoOffset_lo = _mm_slli_epi32(amount_lo, FLT_MANT_DIG-1);
-    __m128i expoOffset_hi = _mm_slli_epi32(amount_hi, FLT_MANT_DIG-1);
-    #else
     // Clears upper bits and shifts into place so that zero padding places it into the exponent 
     __m128i expoPackedHi16 = _mm_srli_epi16( _mm_slli_epi16(amount, 16 - 4), 32-4 - (FLT_MANT_DIG-1) );
 
+    #if 0
     __m128i expoOffset_lo = _mm_unpacklo_epi16(_mm_setzero_si128(), expoPackedHi16);
     __m128i expoOffset_hi = _mm_unpackhi_epi16(_mm_setzero_si128(), expoPackedHi16);
-    #endif
 
-    __m128i powOf2Flt_lo = _mm_add_epi32(expoOffset_lo, _mm_castps_si128(ONE_FLT));
-    __m128i powOf2Flt_hi = _mm_add_epi32(expoOffset_hi, _mm_castps_si128(ONE_FLT));
+    __m128i powOf2Flt_lo = _mm_add_epi32(expoOffset_lo, _mm_set1_epi32(ONE_FLT.bitRep));
+    __m128i powOf2Flt_hi = _mm_add_epi32(expoOffset_hi, _mm_set1_epi32(ONE_FLT.bitRep));
+    #else
+
+    __m128i expoOffsetHi16 = _mm_add_epi16(expoPackedHi16, _mm_set1_epi16(ONE_FLT.bitRep >> 16));
+
+    __m128i powOf2Flt_lo = _mm_unpacklo_epi16(_mm_setzero_si128(), expoOffsetHi16);
+    __m128i powOf2Flt_hi = _mm_unpackhi_epi16(_mm_setzero_si128(), expoOffsetHi16);
+
+    #endif
 
     __m128i powOf2Int_lo = _mm_cvttps_epi32(_mm_castsi128_ps(powOf2Flt_lo));
     __m128i powOf2Int_hi = _mm_cvttps_epi32(_mm_castsi128_ps(powOf2Flt_hi));
@@ -624,8 +678,31 @@ NOINLINE __m128i powOf2Float_16(__m128i toShift, __m128i amount) {
     // Otherwise saturates when powOf2 = 1 << 15
     __m128i powOf2Int = _trunc_u32x4_u16x8(powOf2Int_lo, powOf2Int_hi);
 
+
     return _mm_mullo_epi16(toShift, powOf2Int);
 }
+
+NOINLINE __m128i powOf2FloatA_16(__m128i toShift, __m128i amount) {
+    const union {float asVal; uint32_t bitRep;} NEGONE_FLT = {-1.0f};
+
+
+    // Clears upper bits and shifts into place so that zero padding places it into the exponent 
+    __m128i expoPackedHi16 = _mm_srli_epi16( _mm_slli_epi16(amount, 16 - 4), 32-4 - (FLT_MANT_DIG-1) );
+    __m128i expoOffsetHi16 = _mm_add_epi16(expoPackedHi16, _mm_set1_epi16(NEGONE_FLT.bitRep >> 16));
+
+    __m128i negPow2Flt_lo = _mm_unpacklo_epi16(_mm_setzero_si128(), expoOffsetHi16);
+    __m128i negPow2Flt_hi = _mm_unpackhi_epi16(_mm_setzero_si128(), expoOffsetHi16);
+
+    __m128i negPow2Int_lo = _mm_cvttps_epi32(_mm_castsi128_ps(negPow2Flt_lo));
+    __m128i negPow2Int_hi = _mm_cvttps_epi32(_mm_castsi128_ps(negPow2Flt_hi));
+
+    // A positive power would have saturated with: 1 << 15
+    __m128i negPow2Int_underflow = _mm_packs_epi32(negPow2Int_lo, negPow2Int_hi);
+
+    // `INT_MIN` is equal to desired unsigned power and remains the same when negated
+    return _mm_mullo_epi16(_negate_i16x8(toShift), negPow2Int_underflow);
+}
+
 
 NOINLINE __m128i floatScale_16(__m128i toShift, __m128i amount) {
 
@@ -740,6 +817,7 @@ NOINLINE __m128i directBitByBitA_8(__m128i toShift, __m128i amount) {
 
     return toShift;
 }
+
 
 
 NOINLINE __m128i powOf2Float_8(__m128i toShift, __m128i amount) {

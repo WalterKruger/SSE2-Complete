@@ -89,19 +89,22 @@ int main() {
     size_t iterations = 300000000ull; // 1000000000ull
 
     #ifdef PERF_u8
+    
     printf("\n\nVariable 8-bit LEFT shifts: Time taken to calculate %zu results...\n", iterations);
     perfMessure(scalar_8, iterations, rand_ints);
     perfMessure(powOf2BitByBit_8, iterations, rand_ints);
     perfMessure(directBitByBit_8, iterations, rand_ints);
-	perfMessure(directBitByBitA_8, iterations, rand_ints);
+    perfMessure(directBitByBitA_8, iterations, rand_ints);
     perfMessure(repeatedDouble_8, iterations, rand_ints);
     perfMessure(powOf2Float_8, iterations, rand_ints);
-
+    
     printf("\n8-bit RIGHT shifts: Time taken to calculate %zu results...\n", iterations);
     perfMessure(scalarR_8, iterations, rand_ints);
     perfMessure(directBitByBitR_8, iterations, rand_ints);
-	perfMessure(directBitByBitAR_8, iterations, rand_ints);
+    perfMessure(directBitByBitAR_8, iterations, rand_ints);
     perfMessure(repeatedHalfR_8, iterations, rand_ints);
+    perfMessure(repeatedHalfAR_8, iterations, rand_ints);
+    
     #endif
 
     #ifdef PERF_u16
@@ -111,6 +114,7 @@ int main() {
     perfMessure(directBitByBit_16, iterations, rand_ints);
     perfMessure(powOf2BitByBit_16, iterations, rand_ints);
     perfMessure(powOf2Float_16, iterations, rand_ints);
+    perfMessure(powOf2FloatA_16, iterations, rand_ints);
     perfMessure(floatScale_16, iterations, rand_ints);
 
     printf("\n16-bit RIGHT shifts: Time taken to calculate %zu results...\n", iterations);

@@ -86,26 +86,23 @@ __m128i _shiftRvar_u8x16(__m128i toShift, __m128i amount) {
 
 // Shifts each 16-bit element left by the amount in the corresponding vector, well shifting in zeros (modulo the element size)
 __m128i _shiftLvar_u16x8(__m128i u16ToShift, __m128i amount) {
-    const __m128 ONE_FLT = _mm_set1_ps(1.0f);
-
+    const union {float asVal; uint32_t bitRep;} NEGONE_FLT = {-1.0f};
 
     // Clears upper bits and shifts into place so that zero padding places it into the exponent 
     __m128i expoPackedHi16 = _mm_srli_epi16( _mm_slli_epi16(amount, 16 - 4), 32-4 - (FLT_MANT_DIG-1) );
+    __m128i expoOffsetHi16 = _mm_add_epi16(expoPackedHi16, _mm_set1_epi16(NEGONE_FLT.bitRep >> 16));
 
-    __m128i expoOffset_lo = _mm_unpacklo_epi16(_mm_setzero_si128(), expoPackedHi16);
-    __m128i expoOffset_hi = _mm_unpackhi_epi16(_mm_setzero_si128(), expoPackedHi16);
+    __m128i negPow2Flt_lo = _mm_unpacklo_epi16(_mm_setzero_si128(), expoOffsetHi16);
+    __m128i negPow2Flt_hi = _mm_unpackhi_epi16(_mm_setzero_si128(), expoOffsetHi16);
 
-
-    __m128i powOf2Flt_lo = _mm_add_epi32(expoOffset_lo, _mm_castps_si128(ONE_FLT));
-    __m128i powOf2Flt_hi = _mm_add_epi32(expoOffset_hi, _mm_castps_si128(ONE_FLT));
-
-    __m128i powOf2Int_lo = _mm_cvttps_epi32(_mm_castsi128_ps(powOf2Flt_lo));
-    __m128i powOf2Int_hi = _mm_cvttps_epi32(_mm_castsi128_ps(powOf2Flt_hi));
+    __m128i negPow2Int_lo = _mm_cvttps_epi32(_mm_castsi128_ps(negPow2Flt_lo));
+    __m128i negPow2Int_hi = _mm_cvttps_epi32(_mm_castsi128_ps(negPow2Flt_hi));
     
-    // Otherwise saturates when powOf2 = 1 << 15
-    __m128i powOf2Int = _trunc_u32x4_u16x8(powOf2Int_lo, powOf2Int_hi);
+    // A positive power would have saturated with: 1 << 15
+    __m128i negPow2Int = _mm_packs_epi32(negPow2Int_lo, negPow2Int_hi);
 
-    return _mm_mullo_epi16(u16ToShift, powOf2Int);
+    // `INT_MIN` is equal to desired unsigned power and remains the same when negated
+    return _mm_mullo_epi16(_negate_i16x8(u16ToShift), negPow2Int);
 }
 
 // Shifts each 16-bit element right by the amount in the corresponding vector, well shifting in zeros (modulo the element size)
