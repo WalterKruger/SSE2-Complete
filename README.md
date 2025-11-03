@@ -11,7 +11,7 @@ This library provides full support for the following operations via the [Intel I
   <img alt="Table of instructions per operation" src="external/Instruction_matrix_minimal.png">
 </picture>
 
-...and more! See the [documentation](../../wiki/Function-documentation) or the [instruction matrix](external/Instruction_matrix_FULL.png) for a full list of all added operations.
+...and more! See the [documentation](docs/operations_overview.md) or the [instruction matrix](external/Instruction_matrix_FULL.png) for a full list of all added operations.
 
 # Quick Start
 This is a header only library so all you need to do is place the [sseComplete.h file](include/sseComplete.h) and [sseCom_parts folder](include/sseCom_parts) in your project and then use a `#include "sseComplete.h"` directive in your source file. You can also choose to only include a single header file in the sseCom_parts folder, which will automatically include any additional internal dependencies as well.
@@ -25,7 +25,7 @@ Examples:
 - `_mulFull_i8x16Hi`: Full multiplication (16-bit product) of the upper signed 8-bit integers
 - `_convert_f32x4_u32x4`: Convert 32-bit floats into unsigned 32-bit integers
 
-[See the function documentation for all signatures](../../wiki/Function-documentation)
+[See the function documentation for all signatures](docs/operations_overview.md)
 
 ### Compiler support
 This library should work on all major compilers (clang, GCC, MSVC, ICC). However, because I occasionally needed some platform specific hardware features for the best performance, a handful of operations may not be available on all compilers. In particular, the 64-bit `mulHi` only works on compiler that support the `__int128_t` extension type or MSVC’s intrinsics. Unsupported functions are automatically removed by the preprocessor and shouldn’t cause any issues.
