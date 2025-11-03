@@ -1,6 +1,6 @@
 # Division by a constant
 
-*See the Division by a constant guide for a more detailed description*
+*See the [Division by a constant guide](../division_by_const_guide.md) for a more detailed description*
 
 Divides unsigned integers by precomputed divisor magic vector. Each numerator element can have a unique divisor, they are not required to be the same.
 

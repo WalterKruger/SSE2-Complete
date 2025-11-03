@@ -1,6 +1,6 @@
 # Modulo by a constant
 
-Calculates the modulo (`n%d`) using a precomputed magic number. See the Division by a constant guide.
+Calculates the modulo (`n%d`) using a precomputed magic number. See the [Division by a constant guide](../division_by_const_guide.md).
 
 ## Signature
 

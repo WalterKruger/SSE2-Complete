@@ -2,7 +2,7 @@
 
 Divides integers by their corresponding divisor element. Performs the conventional floor definition of integer division. Dividing by zero and `INT_MIN/-1` is undefined behavior and may not always produce any arithmetic exceptions.
 
-**Note**: This is relatively expensive. Use the “division by a constant” version instead if you reuse the same divisor vector or it known at compile time.
+**Note**: This is relatively expensive. Use the “[division by a constant](division_precompute.md)” version instead if you reuse the same divisor vector or it known at compile time.
 
 ## Signature
 
