@@ -25,3 +25,10 @@ return max(a.element - b.element, 0)
 ```text
 return min(max(a.element - b.element, ELEMENT_MIN), ELEMENT_MAX)
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- Unsigned compares are cheaper.
+- `Signed 32 and 64-bit`: Overwriting the difference with max/min can be done with a single `blendv`.

@@ -31,3 +31,21 @@ return toShift.element << (amount.element % ELEMENT_BITS)
 ```text
 return toShift.element >> (amount.element % ELEMENT_BITS)
 ```
+
+## Future extensions
+
+### SSSE3
+
+- `8-bit`: Use a power of two multiply, obtained through using `_mm_shuffle_epi8` as a lookup table.
+
+### SSE4.1
+
+- `32-bit`: The low multiplication in the left shift is directly supported.
+
+### AVX2
+
+- 32 and 64-bit variables shifts are supported directly (although the amount isn't modulo). 16-bit should be implemented using a width extend.
+
+### AVX512-BW
+
+- 16-bit variables shifts are now supported directly (although the amount isn't modulo). 8-bit should be implemented using a width extend.

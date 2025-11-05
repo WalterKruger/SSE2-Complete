@@ -16,3 +16,9 @@ int _getMsb_i64x2(__m128i)
 ```text
 result.bit[i] = (vector.element[i] >> (ELEMENT_BITS - 1))
 ```
+
+## Future extensions
+
+### AVX512-F
+
+- 16-bit directly supported (but to kmask).

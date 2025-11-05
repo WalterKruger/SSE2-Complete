@@ -17,3 +17,13 @@ __m128i _satConvert_u64x2_u32x4(__m128i loHalf, __m128i hiHalf)
 ```text
 return truncate(min(loHalf, HALF_MAX), min(hiHalf, HALF_MAX))
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- Signed 32-bit to unsigned 16-bit saturation is directly supported. Might be useful for unsigned to unsigned.
+
+### AVX512-F
+
+- Integer truncation is supported for all types. Can be adapted to saturate by comparing upper to non-zero.

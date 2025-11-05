@@ -1,6 +1,6 @@
 # Shuffle Low & High
 
-Using a bit mask known at compile time, select elements from the first vector to be the result’s lower elements and use another mask to select the second vector to be the result’s upper elements. You can use the provided macro `_MM_SHUFHALF(idx1, idx0)` as the mask input to use index notation instead.
+Using a bit mask known at compile time, select elements from the first vector to be the result's lower elements and use another mask to select the second vector to be the result's upper elements. You can use the provided macro `_MM_SHUFHALF(idx1, idx0)` as the mask input to use index notation instead.
 
 ## Signature
 

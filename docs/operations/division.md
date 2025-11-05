@@ -25,3 +25,15 @@ __m128i _div_i64x2(__m128i, __m128i)
 ```text
 return floor(n.element / d.element)
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- `8-bit`: Width extension to 32-bit is directly supported.
+- `16-bit`: Can replace `_trunc` call with `_mm_packus_epi32`.
+- `32-bit`: Check for and overwrite overflow with a single `_mm_blendv_ps`.
+
+### AVX512-VBMI
+
+- `8-bit`: Significantly faster to utilize the "precomputed" method by using `_mm512_permutex2var_epi8` as a lookup table to obtain the magic number. Still need to overwrite division by one. The LUT can be halved as a divisor with MSB set can be replaced with: `(n >= d)? 1 : 0`.

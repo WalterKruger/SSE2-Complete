@@ -22,3 +22,23 @@ FOR i from 0...total_elements {
 
 return result 
 ```
+
+## Future extensions
+
+These shuffles are vastly slower than hardware, so **replacing them with implementations utilizing newer extensions should be prioritized**.
+
+### SSSE3
+
+- Variable shuffles are now supported via `_mm_shuffle_epi8`. 8, 16, and maybe 32-bit should be implemented using it. The larger widths should duplicate their indexes to all their lane's bytes and be offsetted. Remember to deal with the zeroing behaviour of the index's MSB.
+
+### AVX
+
+- 32 and 64-bit are now supported directly (via the floating-point intrinsics). 16-bit can be implemented using them.
+
+### AVX512-BW
+
+- 16-bit is directly supported.
+
+### AVX512-VBMI
+
+- Unlike SSSE3's shuffle, `_mm_permutexvar_epi8` doesn't zero elements when the index's MSB is set.

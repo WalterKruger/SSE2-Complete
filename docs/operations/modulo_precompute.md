@@ -16,3 +16,7 @@ __m128i _modP_u64x2(__m128i n, struct sseCom_divMagic_u64 *magic)
 ```text
 return modByPrecompute(n.element, magic.element)
 ```
+
+## Future extensions
+
+See the [division page](division_precompute.md).

@@ -25,3 +25,13 @@ FOR i from 0...total_elements/2 {
 
 return result
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- `32-bit`: Zero out the upper 16-bit then use `_mm_packus_epi32`.
+
+### AVX512-F
+
+- Integer truncation is directly supported for all types.

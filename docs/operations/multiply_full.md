@@ -29,3 +29,9 @@ __m128i _mulFull_i32x4Even(__m128i, __m128i)
 ```text
 result.doubleElement = (doubleWidth_t)a.element * (doubleWidth_t)b.element
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- Signed 32-bit now directly supported (for the even lanes).

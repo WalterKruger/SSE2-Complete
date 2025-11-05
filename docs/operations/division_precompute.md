@@ -28,3 +28,7 @@ __m128i _divP_u64x2(__m128i n, struct sseCom_divMagic_u64 *magic)
 ```text
 return divByPrecompute(n.element, magic.element)
 ```
+
+### SSE4.1
+
+- `32-bit`: Faster to use `(UMAX_32 / d) * n + (almostRem >= d)` method as low multiplies are directly supported.

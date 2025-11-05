@@ -46,3 +46,19 @@ __m128i _cmpLssEq_i64x2(__m128i, __m128i)
 ```text
 return compareOp(a.element, b.element)? -1 : 0
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- `Unsigned 32-bit compares`: Equality check to unsigned maximum.
+- `64-bit equality`: Directly supported.
+
+### SSE4.2
+
+- `Signed 64-bit compares `: Directly supported.
+- `Unsigned 64-bit compares `: Flip MSB of both operands, use signed compare.
+
+### AVX512
+
+- All integer compare variations directly supported.

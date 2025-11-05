@@ -18,3 +18,9 @@ __m128i _condNegate_i64x2(__m128i toNegate, __m128i condiationMask)
 ```text
 return (toNegate.element ^ conditionMask) - conditionMask
 ```
+
+## Future extensions
+
+### SSSE3
+
+- The sign functions might be useful here. Set the LSB to prevent the zeroing behaviour.

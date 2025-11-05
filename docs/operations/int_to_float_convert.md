@@ -45,3 +45,9 @@ __m128d _convert_i64x2_f64x2(__m128i)
 ```text
 return convertIntToFloat(x.element)
 ```
+
+## Future extensions
+
+### AVX512-F
+
+- Unsigned integer to float conversions directly supported.

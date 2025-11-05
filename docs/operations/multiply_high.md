@@ -23,3 +23,9 @@ __m128i _mulHi_i64x2(__m128i, __m128i)
 ```text
 return ((doubleWidth_t)a.element * (doubleWidth_t)b.element) >> ELEMENT_BITS
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- Signed 32-bit can use `_mm_mul_epi32` like unsigned version.

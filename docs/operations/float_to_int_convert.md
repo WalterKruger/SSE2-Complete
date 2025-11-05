@@ -28,3 +28,13 @@ __m128i _convert_f64x2_u64x2(__m128d)
 ```text
 return convertFloatToInt(x.element)
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- Selecting between scaled value can be done with a single `blendv`.
+
+### AVX512F
+
+- Float to unsigned integer conversions directly supported.

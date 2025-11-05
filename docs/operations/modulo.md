@@ -18,3 +18,7 @@ __m128i _mod_u64x2(__m128i, __m128i)
 ```text
 return n.element - d.element * floor(n.element / d.element)
 ```
+
+## Future extensions
+
+See the [division page](division.md).

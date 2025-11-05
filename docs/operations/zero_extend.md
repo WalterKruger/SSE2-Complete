@@ -21,3 +21,9 @@ __m128i _zeroExtendHi_u32x4_i64x2(__m128i)
 ```text
 return (doubleWidth_t)x.element[i]
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- Zero extensions for all types (and to larger widths) are supported directly.

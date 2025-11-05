@@ -21,3 +21,9 @@ __m128i _signExtendHi_i32x4_i64x2(__m128i)
 ```text
 return (doubleWidth_t)x.element
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- Sign extensions for all types (and to larger widths) are supported directly.

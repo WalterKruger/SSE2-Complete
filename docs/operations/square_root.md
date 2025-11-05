@@ -16,3 +16,9 @@ __m128i _sqrt_u64x2(__m128i)
 ```text
 return floor(sqrt(x.element))
 ```
+
+## Future extensions
+
+### SSSE3
+
+- Maybe beneficial to use `_mm_shuffle_epi8` as a lookup table.

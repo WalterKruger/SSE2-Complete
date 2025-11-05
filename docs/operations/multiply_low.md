@@ -25,3 +25,13 @@ __m128i _mulLo_i64x2(__m128i, __m128i)
 ```text
 return (element_t)(a.element * b.element)
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- 32-bit directly supported.
+
+### AVX512-DQ
+
+- 64-bit directly supported.

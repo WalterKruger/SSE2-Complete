@@ -25,3 +25,14 @@ return min(a.element + b.element, ELEMENT_MAX)
 ```text
 return max(min(a.element + b.element, ELEMENT_MAX), ELEMENT_MIN)
 ```
+
+## Future extensions
+
+### SSE4.1
+
+- Unsigned compares are cheaper.
+- `Signed 32 and 64-bit`: Overwriting the sum with max/min can be done with a single `blendv`.
+
+### SSE4.2
+
+- Signed 64-bit compares directly supported.
