@@ -5,6 +5,7 @@
 #include <float.h>      // Place integer into float exponent
 
 #include "_common.h"
+#include "negation.h"
 #include "shuffle.h"
 #include "conversion.h"
 #include "multiply.h"
