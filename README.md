@@ -25,7 +25,7 @@ Examples:
 - `_mulFull_i8x16Hi`: Full multiplication (16-bit product) of the upper signed 8-bit integers
 - `_convert_f32x4_u32x4`: Convert 32-bit floats into unsigned 32-bit integers
 
-[See the function documentation for all signatures](docs/operations_overview.md)
+[See the function documentation for all signatures](docs/README.md)
 
 ### Compiler support
 This library should work on all major compilers (clang, GCC, MSVC, ICC). However, because I occasionally needed some platform specific hardware features for the best performance, a handful of operations may not be available on all compilers. In particular, the 64-bit `mulHi` only works on compiler that support the `__int128_t` extension type or MSVC’s intrinsics. Unsupported functions are automatically removed by the preprocessor and shouldn’t cause any issues.

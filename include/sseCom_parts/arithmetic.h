@@ -22,15 +22,21 @@ uint16_t _sum_u8x16(__m128i u8ToSum) {
 // Calculates `⌊√n⌋` of every unsigned 8-bit integer
 __m128i _sqrt_u8x16(__m128i u8_radicand) {
     __m128i root = _mm_setzero_si128();
-    __m128i bit = _mm_set1_epi8(1 << (8-2));
+    __m128i bit = _mm_set1_epi8(1 << 6);
 
-    for (int i = 8/2; i > 0; i--) {
-        __m128i rootBitSum = _mm_add_epi8(root, bit);
-        __m128i radGrtSum_mask = _cmpGrtEq_u8x16(u8_radicand, rootBitSum);
+    #ifdef __GNUC__
+        #pragma GCC unroll 4
+    #endif
+    for (int i = 0; i < 4; i++) {
+        __m128i trialRoot = _mm_or_si128(root, bit); 
+        __m128i rootNeedsBit = _cmpGrtEq_u8x16(u8_radicand, trialRoot);
 
-        root = _mm_srli_epi32(root, 1); // Element size doesn't matter
-        root = _mm_add_epi8(root, _mm_and_si128(bit, radGrtSum_mask));
-        u8_radicand = _mm_sub_epi8(u8_radicand, _mm_and_si128(rootBitSum, radGrtSum_mask));
+        // Bit gets carried to next place, conditionally clear
+        __m128i rootBitSet = _mm_avg_epu8(trialRoot, bit);
+        root = _mm_xor_si128(rootBitSet, _mm_andnot_si128(rootNeedsBit, bit));
+
+        // Conditional subtract (avoid using condition via underflow)
+        u8_radicand = _mm_min_epu8(u8_radicand, _mm_sub_epi8(u8_radicand, trialRoot));
 
         bit = _mm_srli_epi32(bit, 2);   // Element size doesn't matter
     }

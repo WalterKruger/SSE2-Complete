@@ -29,3 +29,7 @@ return ((doubleWidth_t)a.element * (doubleWidth_t)b.element) >> ELEMENT_BITS
 ### SSE4.1
 
 - Signed 32-bit can use `_mm_mul_epi32` like unsigned version.
+
+### AVX512-IFMA52
+
+- Might be useful...

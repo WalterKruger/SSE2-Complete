@@ -36,7 +36,7 @@ return toShift.element >> (amount.element % ELEMENT_BITS)
 
 ### SSSE3
 
-- `8-bit`: Use a power of two multiply, obtained through using `_mm_shuffle_epi8` as a lookup table.
+- `8-bit left`: Use a power of two multiply, obtained through using `_mm_shuffle_epi8` as a lookup table.
 
 ### SSE4.1
 

@@ -1,6 +1,6 @@
 # Float to integer conversion (truncation)
 
-Converts floating point elements into integer type via truncation (round towards zero).
+Converts floating point elements into integer types via truncation (round towards zero).
 
 If the float’s value is too great in magnitude to be represented by the integer, the result is undefined. However, for converting a negative float into a unsinged integer the result will be equivalent to converting to a signed type then casting to unsigned (only if it is in range of that signed type).
 
@@ -35,6 +35,6 @@ return convertFloatToInt(x.element)
 
 - Selecting between scaled value can be done with a single `blendv`.
 
-### AVX512F
+### AVX512-F
 
 - Float to unsigned integer conversions directly supported.

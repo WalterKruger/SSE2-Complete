@@ -36,3 +36,7 @@ return max(min(a.element + b.element, ELEMENT_MAX), ELEMENT_MIN)
 ### SSE4.2
 
 - Signed 64-bit compares directly supported.
+
+### AVX512-F
+
+- Calculating signed wrapping can be done with a single `ternarylogic` (since `blendv` works via the MSB).

@@ -18,8 +18,16 @@ __m128i _signExtendHi_i32x4_i64x2(__m128i)
 
 ## Pseudocode
 
+### Low
+
 ```text
-return (doubleWidth_t)x.element
+FOR i from 0...total_elements/2 {
+    signMask = (input.element[i] < 0)? -1 : 0
+
+    result.doubleElement[i] = (signMask << ELEMENT_BITS) | input.element[i] 
+}
+
+return result
 ```
 
 ## Future extensions

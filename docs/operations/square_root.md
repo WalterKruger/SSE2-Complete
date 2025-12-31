@@ -1,6 +1,6 @@
 # Square root
 
-Calculates the integer square root (⌊√n⌋) of each unsigned integer.
+Calculates the integer square root ($`\lfloor\sqrt n\rfloor`$) of each unsigned integer.
 
 ## Signature
 

@@ -1,6 +1,6 @@
 # Get most significant bit of each element (movemask)
 
-Gathers the most significant bit of each vector element and pack them into a scalar bit array.
+Gathers the most significant bit of each vector element and packs them into a scalar bit array (integer).
 
 ## Signature
 

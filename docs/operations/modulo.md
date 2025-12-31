@@ -1,8 +1,8 @@
 # Modulo by a variable
 
-Calculates the remainder/modulo (`n%d`) between corresponding unsigned integer elements. If your divisor is zero, the result is undefined.
+Calculates the remainder/modulo (`n%d`) between corresponding unsigned integer elements. If the divisor is zero, the result is undefined.
 
-**Note**: This is relatively expensive. Use the “[modulo by a constant](modulo_precompute.md)” version instead if you reuse the same divisor vector or it known at compile time.
+**Note**: This is relatively expensive. Use the “[modulo by a constant](modulo_precompute.md)” version instead if you reuse the same divisor vector or when it known at compile time.
 
 ## Signature
 

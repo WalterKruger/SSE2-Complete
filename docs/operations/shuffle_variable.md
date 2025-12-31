@@ -16,11 +16,7 @@ __m128i _shuffleVar_i64x2(__m128i toShuffle, __m128i indexes)
 ## Pseudocode
 
 ```text
-FOR i from 0...total_elements {
-    result.element[i] = toShuffle.element[indexes.element[i]]
-}
-
-return result 
+return result.element[i] = toShuffle.element[indexes.element[i]]
 ```
 
 ## Future extensions

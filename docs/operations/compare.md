@@ -44,7 +44,7 @@ __m128i _cmpLssEq_i64x2(__m128i, __m128i)
 ## Pseudocode
 
 ```text
-return compareOp(a.element, b.element)? -1 : 0
+return COMPARE_OP(a.element, b.element)? -1 : 0
 ```
 
 ## Future extensions

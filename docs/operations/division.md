@@ -2,7 +2,7 @@
 
 Divides integers by their corresponding divisor element. Performs the conventional floor definition of integer division. Dividing by zero and `INT_MIN/-1` is undefined behavior and may not always produce any arithmetic exceptions.
 
-**Note**: This is relatively expensive. Use the “[division by a constant](division_precompute.md)” version instead if you reuse the same divisor vector or it known at compile time.
+**Note**: This is relatively expensive. Use the “[division by a constant](division_precompute.md)” version instead if you reuse the same divisor vector or it is known at compile time.
 
 ## Signature
 
@@ -36,4 +36,4 @@ return floor(n.element / d.element)
 
 ### AVX512-VBMI
 
-- `8-bit`: Significantly faster to utilize the "precomputed" method by using `_mm512_permutex2var_epi8` as a lookup table to obtain the magic number. Still need to overwrite division by one. The LUT can be halved as a divisor with MSB set can be replaced with: `(n >= d)? 1 : 0`.
+- `8-bit`: Significantly faster to utilize the "precomputed" method by using `_mm512_permutex2var_epi8` as a lookup table to obtain the magic number. Need to overwrite division by one. The LUT can be halved as a divisor with MSB set can be replaced with: `(n >= d)? 1 : 0`.
