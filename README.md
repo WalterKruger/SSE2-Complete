@@ -11,7 +11,7 @@ This library provides full support for the following operations via the [Intel I
   <img alt="Table of instructions per operation" src="external/Instruction_matrix_minimal.png">
 </picture>
 
-...and more! See the [documentation](docs/operations_overview.md) or the [instruction matrix](external/Instruction_matrix_FULL.png) for a full list of all added operations.
+...and more! See the [documentation](docs/README.md) or the [instruction matrix](external/Instruction_matrix_FULL.png) for a full list of all added operations.
 
 # Quick Start
 This is a header only library so all you need to do is place the [sseComplete.h file](include/sseComplete.h) and [sseCom_parts folder](include/sseCom_parts) in your project and then use a `#include "sseComplete.h"` directive in your source file. You can also choose to only include a single header file in the sseCom_parts folder, which will automatically include any additional internal dependencies as well.
