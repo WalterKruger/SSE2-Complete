@@ -20,7 +20,7 @@ This list details the `_<str:operation name>` portion of that signature. Suffixe
 - [Saturation addition](operations/add_saturation.md)
 - [Saturation subtraction](operations/sub_saturation.md)
 - [Compare greater/less than](operations/compare.md)
-- [Maximum](operations/.md)
+- [Maximum](operations/maximum.md)
 - [Zero extension (unsigned to larger unsigned)](operations/zero_extend.md)
 - [Sign extension (signed to larger signed)](operations/sign_extend.md)
 - [Truncation (Convert to half width by removing upper bits)](operations/truncate.md)
