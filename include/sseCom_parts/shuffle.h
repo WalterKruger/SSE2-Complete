@@ -14,11 +14,6 @@
 #endif
 
 
-#define SSECOM_DUPE_N4(i) SSECOM_DUPE_Ni(i+0) SSECOM_DUPE_Ni(i+1) SSECOM_DUPE_Ni(i+2) SSECOM_DUPE_Ni(i+3)
-#define SSECOM_DUPE_N16 SSECOM_DUPE_N4(0) SSECOM_DUPE_N4(4) SSECOM_DUPE_N4(8) SSECOM_DUPE_N4(12)
-
-
-
 
 // ====== Shuffle by immediate ======
 
@@ -41,28 +36,82 @@
 
 // Shuffle 8-bit integers using the corresponding index
 __m128i _shuffleVar_i8x16(__m128i toShuff, __m128i indexes) {
-    const __m128i INDEX_MASK = _mm_set1_epi8(0x0f);
+    __m128i loDupe = _mm_unpacklo_epi8(toShuff, toShuff);
+    __m128i hiDupe = _mm_unpackhi_epi8(toShuff, toShuff);
 
-    indexes = _mm_and_si128(indexes, INDEX_MASK);
+    __m128i loloDupe = _mm_unpacklo_epi16(loDupe, loDupe);
+    __m128i lohiDupe = _mm_unpackhi_epi16(loDupe, loDupe);
+    __m128i hiloDupe = _mm_unpacklo_epi16(hiDupe, hiDupe);
+    __m128i hihiDupe = _mm_unpackhi_epi16(hiDupe, hiDupe);
 
-    static uint8_t shuffledVals[16], toShuff_s[16];
-    _mm_storeu_si128((__m128i*)toShuff_s, toShuff);
+    __m128i A = _mm_shuffle_epi32(loloDupe, 0);
+    __m128i E = _mm_shuffle_epi32(lohiDupe, 0);
+    __m128i I = _mm_shuffle_epi32(hiloDupe, 0);
+    __m128i M = _mm_shuffle_epi32(hihiDupe, 0);
 
-    __m128i nextIndexInLo = indexes;
-    uint32_t curIndex32 = 0;
+    // ZERO, Low, Even, Hi
+    __m128i loloParts = _mm_xor_si128(loloDupe, _mm_shuffle_epi32(loloDupe, _MM_SHUFFLE(2,0,0,0)));
+    __m128i lohiParts = _mm_xor_si128(lohiDupe, _mm_shuffle_epi32(lohiDupe, _MM_SHUFFLE(2,0,0,0)));
+    __m128i hiloParts = _mm_xor_si128(hiloDupe, _mm_shuffle_epi32(hiloDupe, _MM_SHUFFLE(2,0,0,0)));
+    __m128i hihiParts = _mm_xor_si128(hihiDupe, _mm_shuffle_epi32(hihiDupe, _MM_SHUFFLE(2,0,0,0)));
 
-    // Need macro as `bsrli` expects an immediate and to encorage unrolling
-    // The force order macro is to prevent a GCC/clang mis-optimization (~30% faster)
-    #define SSECOM_DUPE_Ni(i)\
-        curIndex32 = _mm_cvtsi128_si32(nextIndexInLo);\
-        nextIndexInLo = _mm_bsrli_si128(indexes, ((i)<15)? (i)+1 : 0);\
-        shuffledVals[i] = toShuff_s[(uint8_t)curIndex32];\
-        SSECOM_FORCE_ORDER;
+    __m128i LOW_LOLO =  _mm_shuffle_epi32(loloParts, _MM_SHUFFLE(1,1,1,1));
+    __m128i EVEN_LOLO = _mm_shuffle_epi32(loloParts, _MM_SHUFFLE(2,2,2,2));
+    __m128i HIGH_LOLO = _mm_shuffle_epi32(loloParts, _MM_SHUFFLE(3,3,3,3));
+
+    __m128i LOW_LOHI =  _mm_shuffle_epi32(lohiParts, _MM_SHUFFLE(1,1,1,1));
+    __m128i EVEN_LOHI = _mm_shuffle_epi32(lohiParts, _MM_SHUFFLE(2,2,2,2));
+    __m128i HIGH_LOHI = _mm_shuffle_epi32(lohiParts, _MM_SHUFFLE(3,3,3,3));
+
+    __m128i LOW_HILO =    _mm_shuffle_epi32(hiloParts, _MM_SHUFFLE(1,1,1,1));
+    __m128i EVEN_HILO =   _mm_shuffle_epi32(hiloParts, _MM_SHUFFLE(2,2,2,2));
+    __m128i HIGH_HILO =   _mm_shuffle_epi32(hiloParts, _MM_SHUFFLE(3,3,3,3));
+
+    __m128i LOW_HIHI =    _mm_shuffle_epi32(hihiParts, _MM_SHUFFLE(1,1,1,1));
+    __m128i EVEN_HIHI =   _mm_shuffle_epi32(hihiParts, _MM_SHUFFLE(2,2,2,2));
+    __m128i HIGH_HIHI =   _mm_shuffle_epi32(hihiParts, _MM_SHUFFLE(3,3,3,3));
+
+    __m128i FULL_LOLO = _mm_xor_si128(LOW_LOLO, HIGH_LOLO);
+    __m128i FULL_LOHI = _mm_xor_si128(LOW_LOHI, HIGH_LOHI);
+    __m128i FULL_HILO = _mm_xor_si128(LOW_HILO, HIGH_HILO);
+    __m128i FULL_HIHI = _mm_xor_si128(LOW_HIHI, HIGH_HIHI);
+
+
+    __m128i isOdd64 = _fillWithMSB_i8x16(_mm_slli_epi32(indexes, 8-4));
+    __m128i isOdd32 = _fillWithMSB_i8x16(_mm_slli_epi32(indexes, 8-3));
+    __m128i isOdd16 = _fillWithMSB_i8x16(_mm_slli_epi32(indexes, 8-2));
+    __m128i isOdd8 =  _fillWithMSB_i8x16(_mm_slli_epi32(indexes, 8-1));
+
     
-    SSECOM_DUPE_N16
-    #undef CASE_Ni
+    // abcd_efgh_ijkl_mnop
+    __m128i sumOfHalf_lolo = _mm_xor_si128(LOW_LOLO, _mm_and_si128(FULL_LOLO, isOdd16));
+    __m128i valIfEven_lolo = _mm_xor_si128(A, _mm_and_si128(EVEN_LOLO, isOdd16));
 
-    return _mm_loadu_si128((__m128i*)shuffledVals);
+    __m128i sumOfHalf_lohi = _mm_xor_si128(LOW_LOHI, _mm_and_si128(FULL_LOHI, isOdd16));
+    __m128i valIfEven_lohi = _mm_xor_si128(E, _mm_and_si128(EVEN_LOHI, isOdd16));
+
+    __m128i sumOfHalf_hilo = _mm_xor_si128(LOW_HILO, _mm_and_si128(FULL_HILO, isOdd16));
+    __m128i valIfEven_hilo = _mm_xor_si128(I, _mm_and_si128(EVEN_HILO, isOdd16));
+
+    __m128i sumOfHalf_hihi = _mm_xor_si128(LOW_HIHI, _mm_and_si128(FULL_HIHI, isOdd16));
+    __m128i valIfEven_hihi = _mm_xor_si128(M, _mm_and_si128(EVEN_HIHI, isOdd16));
+
+
+    __m128i valIfLoLo = _mm_xor_si128(valIfEven_lolo, _mm_and_si128(sumOfHalf_lolo, isOdd8));
+    __m128i valIfLoHi = _mm_xor_si128(valIfEven_lohi, _mm_and_si128(sumOfHalf_lohi, isOdd8));
+    __m128i valIfHiLo = _mm_xor_si128(valIfEven_hilo, _mm_and_si128(sumOfHalf_hilo, isOdd8));
+    __m128i valIfHiHi = _mm_xor_si128(valIfEven_hihi, _mm_and_si128(sumOfHalf_hihi, isOdd8));
+
+
+    __m128i LOW =  _mm_xor_si128(valIfLoLo, valIfLoHi);
+    __m128i HIGH = _mm_xor_si128(valIfHiLo, valIfHiHi);
+    __m128i FULL = _mm_xor_si128(LOW, HIGH);
+    __m128i EVEN = _mm_xor_si128(valIfLoLo, valIfHiLo);
+
+    __m128i sumOfHalf = _mm_xor_si128(LOW, _mm_and_si128(FULL, isOdd64));
+    __m128i valIfEven = _mm_xor_si128(valIfLoLo, _mm_and_si128(EVEN, isOdd64));
+
+    return _mm_xor_si128(valIfEven, _mm_and_si128(sumOfHalf, isOdd32));
 }
 
 #undef SSECOM_DUPE_N4
