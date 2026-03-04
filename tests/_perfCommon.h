@@ -2,7 +2,10 @@
 
 #include <stdint.h>
 #include <string.h> // memcpy (type generic load/copy)
+#include <inttypes.h>
 #include <time.h>   // Messuring clock cycles
+#include <immintrin.h>
+#include "../include/sseCom_parts/_common.h"
 
 #define MAYBE_VOLATILE
 
@@ -54,14 +57,44 @@ static uint64_t rrxmrrxmsx_0_64(uint64_t x) {
 }
 #endif
 
+// Uses a condition mask to select between two values, when one of them is a precomputed xor between the two
+// cond? a : b = a ^ (aXORb & cond)
+static inline __m128i _selectXorBoth_i128(__m128i valIfNot, __m128i bothValXor, __m128i conditionMask) {
+    return _mm_xor_si128(valIfNot, _mm_and_si128(bothValXor, conditionMask));
+}
 
+
+
+
+enum { SAMPLES = (1<<13) };
+
+
+
+typedef void (*genericFunc_t)(void);
+
+NOINLINE void perfMessure2int(genericFunc_t funcGeneric, size_t iterations, char* funAsStr, void* rand_ints) {
+    MAYBE_VOLATILE uint64_t result = 0;
+    __m128i (*funcToMessure)(__m128i,__m128i) = (__m128i (*)(__m128i,__m128i))funcGeneric;
+
+    clock_t start_time = clock(); 
+
+    for (size_t i=0; i < iterations; i++) {
+        __m128i arg1 = _mm_loadu_si128( (__m128i*)((uint64_t*)rand_ints + (i % SAMPLES)) );
+        __m128i arg2 = _mm_loadu_si128( (__m128i*)((uint64_t*)rand_ints + ((i+1) % SAMPLES)) );
+
+        result = _mm_cvtsi128_si64(funcToMessure(arg1, arg2));
+    }
+
+    clock_t end_time = clock();
+    printf("%"PRIu64"\t %-20s: %.2f seconds\n", result, funAsStr, (float)(end_time-start_time) / CLOCKS_PER_SEC);
+}
 
 
 
 // Function generator for messuring multiple single argument functions with diffrent argument/return types
 #define GEN_PERF_SINGLE_ARG(returnType, funcName, inputType, scalarResType, scalarInpType, rndValSize, resFormatSpecifyStr) \
-NOINLINE void _perfMessure_ ## funcName ## _func(                            \
-    returnType (*funcToMessure)(inputType), size_t iterations, char* funcAsStr, scalarInpType* randVals\
+NOINLINE void perfMessure_ ## funcName (                            \
+    genericFunc_t funcToMessure, size_t iterations, char* funcAsStr, void* randVals\
 ){\
     const union {__m128i intDefault; returnType ret; inputType inp;} zeroVal = {_mm_setzero_si128()};\
     \
@@ -71,9 +104,9 @@ NOINLINE void _perfMessure_ ## funcName ## _func(                            \
     \
     for (size_t i=0; i < iterations; i++) {                                 \
         inputType toCvt = zeroVal.inp;                                      \
-        memcpy(&toCvt, &randVals[i % (rndValSize)], sizeof(inputType));     \
+        memcpy(&toCvt, (scalarInpType*)randVals + (i % (rndValSize)), sizeof(inputType));     \
         \
-        result = funcToMessure(toCvt);                                      \
+        result = ( (returnType (*)(inputType))funcToMessure )(toCvt);                                      \
     }                                                                       \
     clock_t end_time = clock();                                             \
     \
@@ -83,3 +116,26 @@ NOINLINE void _perfMessure_ ## funcName ## _func(                            \
 }
 
 
+typedef void (*_messure2Ints_t)(genericFunc_t, size_t, char*, void*);
+
+UNUSED static void _groupPerfMessure_func(
+    genericFunc_t funcList[], char *funcsAsStr, size_t funcCount, _messure2Ints_t messureFunc, size_t iterations, void* randValues
+) {
+
+    funcsAsStr = strtok(funcsAsStr, ", ");
+
+    for (size_t i=0; i < funcCount; i++) {
+        messureFunc(funcList[i], iterations, funcsAsStr, randValues);
+        funcsAsStr = strtok(NULL, ", ");
+    }
+}
+
+// Allow macros to expand first
+#define STRVAR(...) #__VA_ARGS__
+
+#define PERF_MESSURE_GROUP(messureFunction, iterations, randValues, func1, ...) do {\
+    char funcListStr[] = STRVAR(func1, __VA_ARGS__);\
+    static __typeof__(func1) *funcList[] = {func1, __VA_ARGS__};\
+    \
+    _groupPerfMessure_func((genericFunc_t*)funcList, funcListStr, sizeof(funcList)/sizeof(void*), messureFunction, iterations, randValues);\
+} while (0)

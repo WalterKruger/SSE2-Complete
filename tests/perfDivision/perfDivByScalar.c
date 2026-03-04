@@ -3,8 +3,8 @@
 #include <emmintrin.h> // SSE2
 #include <time.h>      // Messuring clock cycles
 
-#include "../include/sseComplete.h"
-#include "_perfCommon.h"
+#include "../../include/sseCom_parts/division.h"
+#include "../_perfCommon.h"
 
 
 #define SAMPLES (1<<13) // ~8k
@@ -35,10 +35,32 @@
 
 
 
+
+__m128i _divA_u64x2(__m128i nume, struct sseCom_divMagic_u64 *MAGIC) {
+    uint64_t nume_lo = _mm_cvtsi128_si64(nume);
+    uint64_t nume_hi = _mm_cvtsi128_si64(_mm_shuffle_epi32(nume, _MM_SHUFFLE(3,2,3,2)));
+
+    uint64_t almostQuot_lo = ((__uint128_t)nume_lo * MAGIC->rcpLo) >> 64;
+    uint64_t almostQuot_hi = ((__uint128_t)nume_hi * MAGIC->rcpHi) >> 64;
+
+    uint64_t diff_lo, diff_hi;
+
+    // Quotent is one too small when: `almostQuot * d <= n - d`
+    // ...however `n - d` can underflow, but only when `almostQuot` is exact ("0")
+    uint64_t quot_lo = almostQuot_lo - __builtin_sub_overflow(nume_lo, MAGIC->denomLo, &diff_lo);
+    quot_lo += (almostQuot_lo * MAGIC->denomLo <= diff_lo);
+
+    uint64_t quot_hi = almostQuot_hi - __builtin_sub_overflow(nume_hi, MAGIC->denomHi, &diff_hi);
+    quot_hi += (almostQuot_hi * MAGIC->denomHi <= diff_hi);
+
+    return _mm_unpacklo_epi64(_mm_cvtsi64_si128(quot_lo), _mm_cvtsi64_si128(quot_hi));
+}
+
+
 int main() {
 
     #define PERF_DIV
-    #define PERF_MOD
+    //#define PERF_MOD
 
     const uint64_t PREVENT_DIV0_MASK = UINT64_C(0x0101010101010101);
 
@@ -66,6 +88,7 @@ int main() {
     printf("\nDivision unsigned 64-bit: Time taken to calculate %zu results...\n", iterations);
     divPerfNormal(_div_u64x2, _mm_set1_epi64x);
     divPerfMagic(_divP_u64x2, _getDivMagic_set1_u64x2, sseCom_divMagic_u64);
+    divPerfMagic(_divA_u64x2, _getDivMagic_set1_u64x2, sseCom_divMagic_u64);
 
     #endif
 

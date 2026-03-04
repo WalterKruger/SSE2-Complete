@@ -3,8 +3,11 @@
 #include <stdint.h>
 #include <math.h> // rintl
 #include <emmintrin.h> // SSE2
-#include "_perfCommon.h"
-#include "../include/sseComplete.h"
+#include "../_perfCommon.h"
+
+#include "../../include/sseCom_parts/conversion.h"
+#include "../../include/sseCom_parts/division.h"
+
 
 #ifdef __GNUC__
 // Use the FPU as it uses a 80-bit float capable of representing all 

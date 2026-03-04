@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <emmintrin.h> // SSE2
-#include "_perfCommon.h"
+#include "../_perfCommon.h"
 #include <time.h>      // Messuring clock cycles
 
 #include "divisionMethods.h"
@@ -27,6 +27,14 @@ NOINLINE void _perfMessure_fun(__m128i (*funToMessure)(__m128i, __m128i), size_t
 
 // Don't need to manually enter the function's name
 #define perfMessure(funToMessure, iterations, rand_ints) _perfMessure_fun(funToMessure, iterations, #funToMessure, rand_ints)
+
+
+
+__m128i divPrecomp7_u64(__m128i nume, UNUSED __m128i sink) {
+    struct sseCom_divMagic_u64 MAGIC = _getDivMagic_set1_u64x2(7);
+
+    return _divP_u64x2(nume, &MAGIC);
+}
 
 
 int main() {
@@ -65,46 +73,48 @@ int main() {
         rand_ints[i] = rrmxmx_64(i) | PREVENT_DIV0_MASK;
 
 
-    const size_t iterations = 500000000ull;
+    const size_t iterations = 1000000000ull; // 1000000000ull
 
     #ifdef PERF_u8
 
     printf("\nDivision unsigned 8-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(longDiv_u8, iterations, rand_ints);
-    perfMessure(linDiv_u8, iterations, rand_ints);
-    perfMessure(linfDiv_u8, iterations, rand_ints);
-    perfMessure(vecDiv_u8, iterations, rand_ints);
-    perfMessure(magicDiv_u8, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlDiv_u8, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        //longDiv_u8,
+        //linDiv_u8,
+        linfDiv_u8,
+        vecDiv_u8,
+        //magicDiv_u8,
+        lut64_sse41_u8,
+        _ICC_ONLY(_svmlDiv_u8)
+    );
 
     printf("\nSigned 8-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(vecDiv_i8, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlDiv_i8, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        vecDiv_i8, vecDivA_i8, _ICC_ONLY(_svmlDiv_i8)
+    );
 
     #endif
     #ifdef PERF_mod_u8
 
     printf("\nModulo unsigned 8-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(vecMod_u8, iterations, rand_ints);
-    perfMessure(longMod_u8, iterations, rand_ints);
-    perfMessure(linMod_u8, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlMod_u8, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        vecMod_u8, longMod_u8, linMod_u8, _ICC_ONLY(_svmlMod_u8)
+    );
 
     #endif
     #ifdef PERF_u16
 
     printf("\nUnsigned 16-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(longDiv_u16, iterations, rand_ints);
-    perfMessure(linDiv_u16, iterations, rand_ints);
-    perfMessure(linUnrolledDiv_u16, iterations, rand_ints);
-    perfMessure(linDivf_u16, iterations, rand_ints);
-    perfMessure(vecDiv_u16, iterations, rand_ints);
-    perfMessure(vecRCPDiv_u16, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlDiv_u16, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        longDiv_u16, linDiv_u16, linUnrolledDiv_u16,
+        linDivf_u16, vecDiv_u16, vecRCPDiv_u16,
+        _ICC_ONLY(_svmlDiv_u16)
+    );
     
     printf("\nSigned 16-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(vecDiv_i16, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlDiv_i16, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        vecDiv_i16, _ICC_ONLY(_svmlDiv_i16)
+    );
 
 
 
@@ -112,40 +122,42 @@ int main() {
     #ifdef PERF_u32
 
     printf("\nDivision unsigned 32-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(linDiv_u32, iterations, rand_ints);
-    perfMessure(linUnrolledDiv_u32, iterations, rand_ints);
-    perfMessure(linDivf_u32, iterations, rand_ints);
-    //perfMessure(longDiv_u32, iterations, rand_ints);
-    perfMessure(vecDiv_u32, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlDiv_u32, iterations, rand_ints));
+        PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        linDiv_u32, linUnrolledDiv_u32, linDivf_u32,
+        //longDiv_u32,
+        vecDiv_u32, _ICC_ONLY(_svmlDiv_u32)
+    );
 
     printf("\nDivision signed 32-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(vecDiv_i32, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlDiv_i32, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        vecDiv_i32, _ICC_ONLY(_svmlDiv_i32)
+    );
 
     #endif
     #ifdef PERF_mod_u32
 
     printf("\nModulo unsigned 32-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(linMod_u32, iterations, rand_ints);
-    perfMessure(linUnrollMod_u32, iterations, rand_ints);
-    perfMessure(vecMod_u32, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlMod_u32, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        linMod_u32, linUnrollMod_u32, vecMod_u32, _ICC_ONLY(_svmlMod_u32)
+    );
 
     #endif
 
     #ifdef PERF_u64
 
     printf("\nDivision unsigned 64-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(linDiv_u64, iterations, rand_ints);
-    //perfMessure(longDiv_u64, iterations, rand_ints);
-    perfMessure(linDivf_u64, iterations, rand_ints);
-    perfMessure(vecLin_u64, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlDiv_u64, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        linDiv_u64, //longDiv_u64,
+        linDivf_u64, vecLin_u64, divPrecomp7_u64,
+        _ICC_ONLY(_svmlDiv_u64)
+    );
 
     printf("\nDivision signed 64-bit: Time taken to calculate %llu results...\n", iterations);
-    perfMessure(linDiv_i64, iterations, rand_ints);
-    _ICC_ONLY(perfMessure(_svmlDiv_i64, iterations, rand_ints));
+    PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
+        linDiv_i64, _ICC_ONLY(_svmlDiv_i64)
+    );
 
     #endif
+
+    //char dummy; printf("\nEnd of test..."); scanf("\n%c", &dummy);
 }

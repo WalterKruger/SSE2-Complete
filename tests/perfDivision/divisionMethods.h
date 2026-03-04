@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <emmintrin.h> // SSE2
 
-#include "../include/sseComplete.h"
-#include "_perfCommon.h"
+#include "../../include/sseComplete.h"
+#include "../_perfCommon.h"
 
 
 // ====== 8-bit ======
@@ -144,6 +144,93 @@ NOINLINE __m128i vecDiv_u8(__m128i numerator, __m128i denominator) {
     __m128i res_hi = _mm_packs_epi32(quot_hilo, quot_hihi);
 
     return _mm_packus_epi16(res_lo, res_hi);
+}
+
+
+#include <smmintrin.h>
+NOINLINE __attribute__((target("sse4.1")))
+__m128i lut64_sse41_u8(__m128i nume, __m128i denom) {
+    __attribute__((aligned(16))) static const uint8_t RCP_LUT_64[] = {
+        0,         0xff/1-3,  0xff/2-3,  0xff/3-3,  0xff/4-3,  0xff/5-3,  0xff/6-3,  0xff/7-3, 
+        0xff/8-3,  0xff/9-3,  0xff/10-3, 0xff/11-3, 0xff/12-3, 0xff/13-3, 0xff/14-3, 0xff/15-3, 
+
+        0xff/16-3, 0xff/17-3, 0xff/18-3, 0xff/19-3, 0xff/20-3, 0xff/21-3, 0xff/22-3, 0xff/23-3, 
+        0xff/24-3, 0xff/25-3, 0xff/26-3, 0xff/27-3, 0xff/28-3, 0xff/29-3, 0xff/30-3, 0xff/31-3, 
+
+        0xff/32-3, 0xff/33-3, 0xff/34-3, 0xff/35-3, 0xff/36-3, 0xff/37-3, 0xff/38-3, 0xff/39-3, 
+        0xff/40-3, 0xff/41-3, 0xff/42-3, 0xff/43-3, 0xff/44-3, 0xff/45-3, 0xff/46-3, 0xff/47-3, 
+
+        0xff/48-3, 0xff/49-3, 0xff/50-3, 0xff/51-3, 0xff/52-3, 0xff/53-3, 0xff/54-3, 0xff/55-3, 
+        0xff/56-3, 0xff/57-3, 0xff/58-3, 0xff/59-3, 0xff/60-3, 0xff/61-3, 0xff/62-3, 0xff/63-3
+    };
+
+    #if 0
+
+    uint8_t num_array[16], denom_array[16], quotients[16];
+    
+    _mm_store_si128((__m128i*)num_array, nume);
+    _mm_store_si128((__m128i*)denom_array, denom);
+
+    
+    for (size_t i=0; i < 16; i++) {
+        uint8_t rcp_full = (denom_array[i] < 64)? RCP_LUT_64[denom_array[i] & 0b00111111] : 0;
+        //uint8_t rcp_full = 0xff / denom_array[i];
+
+        rcp_full += 2 - (denom_array[i] > 127)? 1 : -1;
+
+        uint8_t quotApprox = ((uint16_t)num_array[i] * rcp_full) >> 8;
+
+        quotients[i] = quotApprox + ((num_array[i] - (quotApprox * denom_array[i])) > denom_array[i]);
+    }
+
+    return _mm_loadu_si128((__m128i*)quotients);
+
+    # else
+
+    __m128i rcp_lut_lolo = _mm_load_si128((__m128i*)RCP_LUT_64 + 0);
+    __m128i rcp_lut_lohi = _mm_load_si128((__m128i*)RCP_LUT_64 + 1);
+    __m128i rcp_lut_hilo = _mm_load_si128((__m128i*)RCP_LUT_64 + 2);
+    __m128i rcp_lut_hihi = _mm_load_si128((__m128i*)RCP_LUT_64 + 3);
+
+
+    // To zero out values > 63
+    __m128i denom_zero_overflow = _mm_adds_epu8(denom, _mm_set1_epi8(0b01000000));
+
+    __m128i rcp_lolo = _mm_shuffle_epi8(rcp_lut_lolo, denom_zero_overflow);
+    __m128i rcp_lohi = _mm_shuffle_epi8(rcp_lut_lohi, denom_zero_overflow);
+    __m128i rcp_hilo = _mm_shuffle_epi8(rcp_lut_hilo, denom_zero_overflow);
+    __m128i rcp_hihi = _mm_shuffle_epi8(rcp_lut_hihi, denom_zero_overflow);
+
+    __m128i rcp_lo = _mm_blendv_epi8(rcp_lolo, rcp_lohi, _mm_slli_epi32(denom, 3));
+    __m128i rcp_hi = _mm_blendv_epi8(rcp_hilo, rcp_hihi, _mm_slli_epi32(denom, 3));
+    __m128i rcp_full = _mm_blendv_epi8(rcp_lo, rcp_hi, _mm_slli_epi32(denom, 2));
+
+    // [1:63] +3, [64:85] = 3, [86,127] = 2, [128:255] = 1
+    __m128i highOffset = _mm_sub_epi8(
+        _mm_set1_epi8(2),
+        _mm_sign_epi8(_mm_cmplt_epi8(denom, _mm_set1_epi8(86)), denom)
+    );
+
+    rcp_full = _mm_add_epi8(rcp_full, highOffset);
+
+    __m128i rcpZeroPad_lo = _mm_unpacklo_epi8(_mm_setzero_si128(), rcp_full);
+    __m128i rcpZeroPad_hi = _mm_unpackhi_epi8(_mm_setzero_si128(), rcp_full);
+
+    // (a * (b << 8)) >> 16
+    __m128i almostRes_lo = _mm_mulhi_epu16(_mm_cvtepu8_epi16(nume), rcpZeroPad_lo);
+    __m128i almostRes_hi = _mm_mulhi_epu16(_mm_unpackhi_epi8(nume, _mm_setzero_si128()), rcpZeroPad_hi);
+
+    // approx + (n - (approx * d) >= d)
+    __m128i invApprox_lo = _mm_mullo_epi16(_mm_cvtepu8_epi16(denom), almostRes_lo);
+    __m128i invApprox_hi = _mm_mullo_epi16(_mm_unpackhi_epi8(denom, _mm_setzero_si128()), almostRes_hi);
+
+    __m128i invApprox = _mm_packus_epi16(invApprox_lo, invApprox_hi);
+    __m128i almostRes = _mm_packus_epi16(almostRes_lo, almostRes_hi);
+
+    __m128i needsOffset = _cmpGrtEq_u8x16(_mm_sub_epi8(nume, invApprox), denom);
+
+    return _mm_sub_epi8(almostRes, needsOffset);
+    #endif
 }
 
 
@@ -527,6 +614,81 @@ NOINLINE __m128i vecDiv_i8(__m128i numerator, __m128i denominator) {
     // This can saturate when (INT8_MAX / -1), but this is undefined behavior anyway
     return _mm_packs_epi16(quot_lo, quot_hi);
 }
+
+#include <tmmintrin.h>
+__attribute__((target("ssse3")))
+NOINLINE __m128i vecDivA_i8(__m128i numerator, __m128i denominator) {
+    // lolo [#,#,#,n12 ,#,#,#,n8 #,#,#,n4 ,#,#,#,n0]
+    __m128i nume_lolo32 = _mm_srai_epi32(_mm_slli_epi32(numerator, 32 - 8*1), 32-8);
+    __m128i nume_lohi32 = _mm_srai_epi32(_mm_slli_epi32(numerator, 32 - 8*2), 32-8);
+    __m128i nume_hilo32 = _mm_srai_epi32(_mm_slli_epi32(numerator, 32 - 8*3), 32-8);
+    __m128i nume_hihi32 = _mm_srai_epi32(numerator, 32-8);
+
+    __m128i denom_lolo32 = _mm_srai_epi32(_mm_slli_epi32(denominator, 32 - 8*1), 32-8);
+    __m128i denom_lohi32 = _mm_srai_epi32(_mm_slli_epi32(denominator, 32 - 8*2), 32-8);
+    __m128i denom_hilo32 = _mm_srai_epi32(_mm_slli_epi32(denominator, 32 - 8*3), 32-8);
+    __m128i denom_hihi32 = _mm_srai_epi32(denominator, 32-8);
+
+
+    __m128 quot_lolo = _mm_div_ps( _mm_cvtepi32_ps(nume_lolo32), _mm_cvtepi32_ps(denom_lolo32) );
+    __m128 quot_lohi = _mm_div_ps( _mm_cvtepi32_ps(nume_lohi32), _mm_cvtepi32_ps(denom_lohi32) );
+    __m128 quot_hilo = _mm_div_ps( _mm_cvtepi32_ps(nume_hilo32), _mm_cvtepi32_ps(denom_hilo32) );
+    __m128 quot_hihi = _mm_div_ps( _mm_cvtepi32_ps(nume_hihi32), _mm_cvtepi32_ps(denom_hihi32) );
+
+    // [5,1, 4,0]
+    // [7,3, 6,2]
+    //      [3,2, 1,0], [7,6, 5,4]
+
+
+
+    // lolo [r4 ,#,#,#, r0], lohi [r5,..., r1], hilo [r6,..., r2], hihi [r7,..., r3]
+
+
+
+    // unpacklo[lolo, lohi] [#,#,#,#,   #,#,5,4,    #,#,#,#,    #,#,1,0]
+    // unpacklo[hilo, hihi] [#,#,#,#,   #,#,7,6,    #,#,#,#,    #,#,3,2]
+    // unpackhi[lolo, lohi] [#,#,#,#,   #,#,13,12,  #,#,#,#,    #,#,9,8]
+    // unpackhi[hilo, hihi] [#,#,#,#,   #,#,15,14,  #,#,#,#,    #,#,11,10]
+
+    // shufLoHi[unpackhilo LO]  [#,#,13,12, #,#,9,8,    #,#,5,4,    #,#,1,0]
+    // shufLoHi[unpackhilo HI]  [#,#,15,14, #,#,11,10,  #,#,7,6,    #,#,3,2]
+
+
+    // Packs32
+    // [#,13 ,#,9, #,5, #,1,       #,12 ,#,8, #,4, #,0]
+    // [#,15 ,#,11, #,7, #,3,      #,14 ,#,10, #,6, #,2]
+
+    // [15,11,7,3,14,10,6,2,    13,9,5,1,12,8,4,0]
+
+
+
+    // hihi[15,11,7,3]  hilo[14,10,6,2]    lohi[13,9,5,1]  lolo[12,8,4,0]
+
+    // [5,4,    1,0]    unpacklo[lolo, lohi]
+    // [7,6,    3,2]    unpacklo[hilo, hihi]
+    // [13,12,  9,8]    unpackhi[lolo, lohi]
+    // [15,14,  11,10]  unpackhi[hilo, hihi]
+
+
+    // LO: [#,14 ,#,10, #,6, #,2,     #,12 ,#,8, #,4, #,0]
+    // HI: [#,15 ,#,11, #,7, #,3,     #,13 ,#,9, #,5, #,1]
+    __m128i reslo = _mm_packs_epi32(_mm_cvttps_epi32(quot_lolo), _mm_cvttps_epi32(quot_hilo));
+    __m128i reshi = _mm_packs_epi32(_mm_cvttps_epi32(quot_lohi), _mm_cvttps_epi32(quot_hihi));
+
+    // [#,#,#,#,#,#,#,#  ,14,10,6,2,  12,8,4,0]
+    // [#,#,#,#,#,#,#,#  ,15,11,7,3,  13,9,5,1]
+    reslo = _mm_packs_epi16(reslo, reslo);
+    reshi = _mm_packs_epi16(reshi, reshi);
+    
+    // [15,14,11,10,7,6,3,2,         13,12,9,8,5,4,1,0]
+    reslo = _mm_unpacklo_epi8(reslo, reshi);
+
+    // [15,14, 13,12, 11,10,  9,8, 7,6,  5,4,   3,2,  1,0]
+
+
+}
+
+
 
 NOINLINE __m128i vecDiv_i16(__m128i numerator, __m128i denominator) {
     __m128 nume_lo_flt = _mm_cvtepi32_ps( _signExtendLo_i16x8_i32x4(numerator) );

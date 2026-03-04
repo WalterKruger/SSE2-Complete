@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <emmintrin.h> // SSE2
 
-//#include "../include/sseComplete.h"
-#include "_perfCommon.h"
+//#include "../../include/sseComplete.h"
+#include "../_perfCommon.h"
 
 // ===== Float32 to unsigned int 32 =====
 
@@ -171,6 +171,20 @@ NOINLINE __m128i scalarInstruction_f64ToU32(__m128d f64_toCvt) {
     __m128i hi_vec = _mm_cvtsi32_si128((uint32_t)i64_hi);
 
     return _mm_unpacklo_epi32(lo_vec, hi_vec);
+}
+
+// NOTE: Rounds to nearest ties-to-even, rather then to zero
+NOINLINE __m128i scaleIntoMant_f64ToU32(__m128d f64_toCvt) {
+    /* Round to zero instead (+ bitshift)
+        __m128d fixedPoint = _mm_add_pd(x,  _mm_set1_pd((1ull << (52-16)) * 1.5));
+        __m128i intPartInLow = _mm_srli_epi64(_mm_castpd_si128(fixedPoint), 16);
+        return _shuffleLoHi_i32x4(intPartInLow, _MM_SHUFHALF(3, 1),_mm_setzero_si128(), 0x0);
+    */
+    const __m128d OFFSET_TO_INT = _mm_set1_pd((1ull << (DBL_MANT_DIG-1)) + (1ull << (DBL_MANT_DIG-2)));
+
+    __m128i mantAsInt = _mm_castpd_si128(_mm_add_pd(f64_toCvt, OFFSET_TO_INT));
+
+    return _shuffleLoHi_i32x4(mantAsInt, _MM_SHUFHALF(2,0), _mm_setzero_si128(), 0x0);
 }
 
 NOINLINE __m128i compiler_f64ToU32(__m128d f64_toCvt) {

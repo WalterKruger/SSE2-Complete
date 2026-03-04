@@ -3,8 +3,8 @@
 #include <stdint.h>
 #include <emmintrin.h> // SSE2
 
-#include "../include/sseComplete.h"
-#include "_perfCommon.h"
+#include "../../include/sseComplete.h"
+#include "../_perfCommon.h"
 
 
 // ====== 8-bit ======

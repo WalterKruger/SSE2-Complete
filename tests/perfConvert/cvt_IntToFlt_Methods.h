@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <emmintrin.h> // SSE2
 
-#include "../include/sseComplete.h"
+#include "../../include/sseComplete.h"
 
 
 #define SSE_LITERAL_UNION_DBL static const volatile union {double array[2]; __m128d vec;}
