@@ -257,58 +257,45 @@ __m128i _subSat_i64x2(__m128i minuend, __m128i subtrahend) {
     return _either_i128(clampedValue, differance, hasWrapped);
 }
 
-
-// 64-bit compares are very expensive!
-/*
-__m128i _addSat_u64x2(__m128i a, __m128i b) {
-    __m128i sum = _mm_add_epi64(a,b);
-    __m128i hasOverflowed = _cmpGrt_u64x2(a, sum);
-
-    return _mm_or_si128(sum, hasOverflowed);
-}
-*/
-
 // Add the corresponding unsigned 64-bit elements together 
 // If that addition would have resulted in an overflow, it is clamped to UINT64_MAX instead
 __m128i _addSat_u64x2(__m128i a, __m128i b) {
-    #if 0
-    __m128i sum = _mm_add_epi64(a,b);
-
-    // A carry can only occur if either of the inputs have atleast one bit set
-    // Positions that create carries will xor to be zero (1 ^ Cin = 0; 1 ^ 1 = 0)
-    // ...except for positions that generated a carry and had a carry in 
-    __m128i generateCarry = _mm_and_si128(a, b);
-    __m128i propergateOrGenWithoutCin = _mm_andnot_si128(sum, _mm_or_si128(a, b));
-    __m128i bitsThatCarried = _mm_or_si128(generateCarry, propergateOrGenWithoutCin);
-
-    // If the MSB carried, an overflow must have occurred
-    __m128i hasOverflowedMask = _fillWithMSB_i64x2(bitsThatCarried);
-
-    // Overwrite sum with int max when overflowed
-    return _mm_or_si128(sum, hasOverflowedMask);
-    #else
-
     __m128i sum = _mm_add_epi64(a,b);
     __m128i hasOverflowed = _cmpGrt_u64x2(a, sum);
 
+    // Set to `INT_MAX` (AllOnes) when carry
     return _mm_or_si128(sum, hasOverflowed);
-
-    #endif
 }
 
 // Subtract the corresponding unsigned 64-bit elements
 // If that subtraction would have resulted in an underflow, it is clamped to 0 instead
 __m128i _subSat_u64x2(__m128i minuend, __m128i subtrahend) {
-    // See `cmpLss_u64x2` for the logic
-    
-    __m128i difference = _mm_sub_epi64(minuend, subtrahend);
+    __m128i differance = _mm_sub_epi64(minuend, subtrahend);
+    __m128i hasUnderflowed = _cmpLss_u64x2(minuend, differance);
 
-   // The cases where we know that the difference's MSB wasn't left over from `a`
-    __m128i diffMSBNotFromA = _mm_andnot_si128(minuend, difference);
-    // When MSB(b): a>b iff the `a-b` removed the MSB of `a` and a borrow didn't "restore" it
-    __m128i bMSBExcludeDiffShowsAGrt = _mm_andnot_si128(_mm_andnot_si128(difference, minuend), subtrahend);
+    // Keep only when no underflow (0 & x = 0)
+    return _mm_andnot_si128(hasUnderflowed, differance);
+}
 
-    __m128i hasUnderflowed = _fillWithMSB_i64x2(_mm_or_si128(diffMSBNotFromA, bMSBExcludeDiffShowsAGrt));
 
-    return _mm_andnot_si128(hasUnderflowed, difference);
+
+
+// =================
+//      Average
+// =================
+
+// Average unsigned integers by calculating their `33-bit` sums, divided by 2 rounded up
+SSECOM_INLINE __m128i _avg_u32x4(__m128i a, __m128i b) {
+    __m128i halfAdd = _mm_add_epi32(_mm_srli_epi32(a, 1), _mm_srli_epi32(b, 1));
+    __m128i leastRoundUp = _mm_and_si128(_mm_or_si128(a, b), _mm_set1_epi32(1));
+
+    return _mm_add_epi32(halfAdd, leastRoundUp);
+}
+
+// Average unsigned integers by calculating their `65-bit` sums, divided by 2 rounded up
+SSECOM_INLINE __m128i _avg_u64x2(__m128i a, __m128i b) {
+    __m128i halfAdd = _mm_add_epi64(_mm_srli_epi64(a, 1), _mm_srli_epi64(b, 1));
+    __m128i leastRoundUp = _mm_and_si128(_mm_or_si128(a, b), _mm_set1_epi64x(1));
+
+    return _mm_add_epi64(halfAdd, leastRoundUp);
 }

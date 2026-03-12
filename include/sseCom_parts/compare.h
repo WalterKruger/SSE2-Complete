@@ -101,14 +101,20 @@ __m128i _cmpGrt_i64x2(__m128i a, __m128i b) {
     return _cmpLss_i64x2(b, a);
 }
 
-// Compare signed 64-bit elements for less-than or equal-to and return a mask of all 1s if true
-__m128i _cmpLssEq_i64x2(__m128i a, __m128i b) {
-    return _mm_cmpeq_epi32(_cmpGrt_i64x2(a, b), _mm_setzero_si128());
-}
-
 // Compare signed 64-bit elements for greater-than or equal-to and return a mask of all 1s if true
 __m128i _cmpGrtEq_i64x2(__m128i a, __m128i b) {
-    return _mm_cmpeq_epi32(_cmpLss_i64x2(a, b), _mm_setzero_si128());
+    __m128i signsDiffer_MSB = _mm_xor_si128(a, b);
+    __m128i aIsNeg_bIsPos_MSB = _mm_andnot_si128(b, a);
+
+    __m128i difference = _mm_sub_epi64(a, b);
+    __m128i result_MSB = _mm_or_si128(_mm_andnot_si128(signsDiffer_MSB, difference), aIsNeg_bIsPos_MSB);
+
+    return _mm_cmpgt_epi32(_mm_shuffle_epi32(result_MSB, _MM_SHUFFLE(3,3,1,1)), _setone_i128());
+}
+
+// Compare signed 64-bit elements for less-than or equal-to and return a mask of all 1s if true
+__m128i _cmpLssEq_i64x2(__m128i a, __m128i b) {
+    return _cmpGrtEq_i64x2(b, a);
 }
 
 // Compare 64-bit integer elements for equality and return a mask of all 1s if true
@@ -121,65 +127,34 @@ SSECOM_INLINE __m128i _cmpEq_i64x2(__m128i a, __m128i b) {
 }
 
 
-#if 0
-__m128i _cmpLss_u64x2(__m128i a, __m128i b) {
-    __m128i isLess_32 = _cmpLss_u32x4(a, b);
-    __m128i isEql_32 = _mm_cmpeq_epi32(a, b);
-
-    __m128i loIsLess_inHi = _mm_slli_epi64(isLess_32, 32);
-
-    // If the upper 32 is equal, then the lower determines the results
-    __m128i result_hi = _mm_or_si128(
-       isLess_32, _mm_and_si128(isEql_32, loIsLess_inHi)
-    );
-
-    return _mm_shuffle_epi32(result_hi, _MM_SHUFFLE(3,3,1,1));
-}
-
-__m128i _cmpGrt_u64x2(__m128i a, __m128i b) {
-    return _cmpLss_u64x2(b, a);
-}
-#endif
-
-
-// Compare unsigned 64-bit elements for less-than and return a mask of all 1s if true
-__m128i _cmpLss_u64x2(__m128i a, __m128i b) {
-    __m128i difference = _mm_sub_epi64(a, b);
-
-    /*      Underflow based on MSB
-        |___A___|___B___|__A-B__:__A<B__|
-        |   0   |   0   |   0   :   0   |
-        |   0   |   0   |   1   :   1   | (!A & D)
-        |   0   |   1   |   0   :   1   | (B & !(!D & A))
-        |   0   |   1   |   1   :   1   | (B & !(!D & A)) + (!A & D)
-        |   1   |   0   |   0   :   0   |
-        |   1   |   0   |   1   :   0   | 
-        |   1   |   1   |   0   :   0   |
-        |   1   |   1   |   1   :   1   | (B & !(!D & A))
-    */
-    // The cases where we know that the difference's MSB wasn't left over from `a`
-    __m128i diffMSBNotFromA = _mm_andnot_si128(a, difference);
-    // When MSB(b): a>b iff the `a-b` removed the MSB of `a` and a borrow didn't "restore" it
-    __m128i bMSBExcludeDiffShowsAGrt = _mm_andnot_si128(_mm_andnot_si128(difference, a), b);
-
-    return _fillWithMSB_i64x2(_mm_or_si128(diffMSBNotFromA, bMSBExcludeDiffShowsAGrt));
-}
-
 // Compare unsigned 64-bit elements for greater-than and return a mask of all 1s if true
 SSECOM_INLINE __m128i _cmpGrt_u64x2(__m128i isGrt, __m128i isLss) {
-    return _cmpLss_u64x2(isLss, isGrt);
+    __m128i halfDiff = _mm_xor_si128(isGrt, isLss);
+    __m128i halfBorrow = _mm_and_si128(halfDiff, isGrt); // isGrt & ~isLss
+    __m128i subRight1 = _mm_sub_epi64(_mm_srli_epi64(halfDiff, 1), halfBorrow); 
+
+    return _fillWithMSB_i64x2(subRight1);
+}
+
+// Compare unsigned 64-bit elements for less-than and return a mask of all 1s if true
+SSECOM_INLINE __m128i _cmpLss_u64x2(__m128i isLss, __m128i isGrt) {
+    return _cmpGrt_u64x2(isGrt, isLss);
 }
 
 // Cmpeq size doesn't matter
 
 // Compare unsigned 64-bit elements for less-than or equal-to and return a mask of all 1s if true
-SSECOM_INLINE __m128i _cmpLssEq_u64x2(__m128i a, __m128i b) {
-    return _mm_cmpeq_epi32(_cmpGrt_u64x2(a, b), _mm_setzero_si128());
+SSECOM_INLINE __m128i _cmpLssEq_u64x2(__m128i isLssEq, __m128i isGrtEq) {
+    __m128i halfDiff = _mm_xor_si128(isLssEq, isGrtEq);
+    __m128i halfBorrow = _mm_and_si128(halfDiff, isLssEq); // isLssEq & ~isGrtEq
+    __m128i subRight1 = _mm_sub_epi64(_mm_srli_epi64(halfDiff, 1), halfBorrow);
+
+    return _mm_cmpgt_epi32(_mm_shuffle_epi32(subRight1, _MM_SHUFFLE(3,3,1,1)), _setone_i128());
 }
 
 // Compare unsigned 64-bit elements for greater-than or equal-to and return a mask of all 1s if true
-SSECOM_INLINE __m128i _cmpGrtEq_u64x2(__m128i a, __m128i b) {
-    return _mm_cmpeq_epi32(_cmpLss_u64x2(a, b), _mm_setzero_si128());
+SSECOM_INLINE __m128i _cmpGrtEq_u64x2(__m128i isGrtEq, __m128i isLssEq) {
+    return _cmpLssEq_u64x2(isLssEq, isGrtEq);
 }
 
 
@@ -189,7 +164,10 @@ SSECOM_INLINE __m128i _cmpGrtEq_u64x2(__m128i a, __m128i b) {
 // Return the larger element between the corresponding signed 32-bit integers
 __m128i _max_i32x4(__m128i a, __m128i b) {
     __m128i isGrtMask = _mm_cmpgt_epi32(a, b);
-    return _either_i128(a, b, isGrtMask);
+    __m128i xorSum = _mm_xor_si128(a, b);
+
+    // b ^ (a ^ b) = a
+    return _mm_xor_si128(b, _mm_and_si128(xorSum, isGrtMask));
 }
 
 // Return the larger element between the corresponding signed 8-bit integers
