@@ -52,12 +52,13 @@ return COMPARE_OP(a.element, b.element)? -1 : 0
 ### SSE4.1
 
 - `Unsigned 32-bit compares`: Equality check to unsigned maximum.
+- `Signed 64-bit compares`: One less operation `cmpGrt(a, b) = msbFill(_mm_blendv_pd(b | (b - a), b & (b - a), a))`. Outclassed by SSE4.2.
 - `64-bit equality`: Directly supported.
 
 ### SSE4.2
 
-- `Signed 64-bit compares `: Directly supported.
-- `Unsigned 64-bit compares `: Flip MSB of both operands, use signed compare.
+- `Signed 64-bit compares`: Directly supported.
+- `Unsigned 64-bit compares`: Flip MSB of both operands, use signed compare.
 
 ### AVX512
 

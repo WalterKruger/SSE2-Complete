@@ -38,6 +38,7 @@ This list details the `_<str:operation name>` portion of that signature. Suffixe
 - [Full multiplication](operations/multiply_high.md)
 - [Negation](operations/negation.md)
 - [Conditional negation](operations/negation_conditional.md)
+- [Absolute value](operations/absolute_value.md)
 - [Logical shift](operations/shift_logical.md)
 - [Arithmetic shift](operations/shift_arithmetic.md)
 - [Variable logical shift](operations/shift_variable.md)

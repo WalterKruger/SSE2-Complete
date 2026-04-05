@@ -22,3 +22,11 @@ return floor(sqrt(x.element))
 ### SSSE3
 
 - Maybe beneficial to use `_mm_shuffle_epi8` as a lookup table.
+
+### AVX512-VMI
+
+- Crosslane permutes allow for a much larger lookup table.
+
+### AVX512-FP16
+
+- Might be faster.
