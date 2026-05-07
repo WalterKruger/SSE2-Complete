@@ -183,3 +183,13 @@ SSECOM_INLINE __m128i _max_i8x16(__m128i a, __m128i b) {
         return _mm_xor_si128(unsignedMax, _mm_set1_epi8(CHAR_MIN));
     #endif
 }
+
+// Return the larger element between the corresponding unsigned 16-bit integers
+SSECOM_INLINE __m128i _max_u16x8(__m128i a, __m128i b) {
+    return _mm_add_epi16(a, _mm_subs_epu16(b, a));
+}
+
+// Return the smaller element between the corresponding unsigned 16-bit integers
+SSECOM_INLINE __m128i _min_u16x8(__m128i a, __m128i b) {
+    return _mm_sub_epi16(a, _mm_subs_epu16(a, b));
+}

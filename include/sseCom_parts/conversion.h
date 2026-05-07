@@ -61,6 +61,19 @@ SSECOM_INLINE __m128i _trunc_u16x8_u8x16(__m128i u16LoHalf, __m128i u16HiHalf) {
     return _mm_packus_epi16(loHalf_lo8, hiHalf_lo8);
 }
 
+// Convert unsigned 16-bit integers into 8-bit via unsigned saturation
+// (When value is too large to fit, it is clamped to UINT8_MAX)
+SSECOM_INLINE __m128i _satConvert_u16x8_u8x16(__m128i u16LoHalf, __m128i u16HiHalf) {
+    __m128i halfClamp_lo = _mm_subs_epu16(_mm_set1_epi16(UINT8_MAX), u16LoHalf);
+    __m128i halfClamp_hi = _mm_subs_epu16(_mm_set1_epi16(UINT8_MAX), u16HiHalf);
+
+    // Always below `UINT8_MAX`, can't saturation
+    __m128i halfClamp = _mm_packus_epi16(halfClamp_lo, halfClamp_hi);
+    
+    // min(x, MAX) = MAX - satSub(MAX, x)
+    return _mm_sub_epi16(_mm_set1_epi8((char)UINT8_MAX), halfClamp);
+}
+
 
 // ====== 32-bit ======
 
@@ -106,20 +119,34 @@ SSECOM_INLINE __m128i _trunc_u32x4_u16x8(__m128i u32LoHalf, __m128i u32HiHalf) {
 }
 
 // Convert unsigned 32-bit integers into 16-bit via unsigned saturation
-// (When value is too large to fit, it is clamped to UINT32_MAX)
+// (When value is too large to fit, it is clamped to UINT16_MAX)
 __m128i _satConvert_u32x4_u16x8(__m128i u32LoHalf, __m128i u32HiHalf) {
-    // TODO: Maybe there is a cheaper way...
-    __m128i loWontSat = _mm_cmpeq_epi16( _mm_srli_epi32(u32LoHalf, 16), _mm_setzero_si128());
-    __m128i loWillSat = _mm_cmpeq_epi16(loWontSat, _mm_setzero_si128());
-
-    __m128i hiWontSat = _mm_cmpeq_epi16(_mm_srli_epi32(u32HiHalf, 16), _mm_setzero_si128());
-    __m128i hiWillSat = _mm_cmpeq_epi16(hiWontSat, _mm_setzero_si128());
+    #if 0
+    __m128i hiTrunc = _mm_packs_epi32( _mm_srai_epi32(u32LoHalf, 16), _mm_srai_epi32(u32HiHalf, 16));
+    __m128i doesntSat = _mm_cmpeq_epi16(hiTrunc, _mm_setzero_si128());
     
-    // Cause a saturation before truncating
-    u32LoHalf = _mm_or_si128(u32LoHalf, loWillSat);
-    u32HiHalf = _mm_or_si128(u32HiHalf, hiWillSat);
+    __m128i loTrunc = _trunc_u32x4_u16x8(u32LoHalf, u32HiHalf);
 
-    return _trunc_u32x4_u16x8(u32LoHalf, u32HiHalf);
+    return _mm_or_si128(loTrunc, _mm_cmpeq_epi16(doesntSat, _mm_setzero_si128()));
+    #else
+    
+    // Sign extend lower (prevents saturation) and add upper
+    __m128i madd_lo = _mm_madd_epi16(u32LoHalf, _mm_set1_epi16(1));
+    __m128i madd_hi = _mm_madd_epi16(u32HiHalf, _mm_set1_epi16(1));
+    __m128i plainTrunc = _mm_packs_epi32(madd_lo, madd_hi);
+
+    // Lower is only unaffected if upper is zero
+    __m128i hiNotZero_lo = _mm_cmpeq_epi16(madd_lo, u32LoHalf);
+    __m128i hiNotZero_hi = _mm_cmpeq_epi16(madd_hi, u32HiHalf);
+
+    // [0,0]: 0, [0,1]: MAX, [1,0]: MIN, [1,1]: -1
+    __m128i eqlSat = _mm_packs_epi32(hiNotZero_lo, hiNotZero_hi);
+
+    __m128i shouldSaturate = _mm_cmpeq_epi16(_mm_add_epi16(eqlSat,eqlSat), _mm_setzero_si128());
+
+    return _mm_or_si128(plainTrunc, shouldSaturate);
+
+    #endif
 }
 
 // ====== 64-bit ======

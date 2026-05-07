@@ -176,19 +176,14 @@ __m128i _subSat_u32x4(__m128i minuend, __m128i subtrahend) {
 __m128i _addSat_i32x4(__m128i a, __m128i b) {
     __m128i sum = _mm_add_epi32(a, b);
 
-    __m128i inpSignDiffer_MSB = _mm_xor_si128(a, b);
-    __m128i resSignDiffer_MSB = _mm_xor_si128(sum, a);
-
-    // Input elements have the same sign, but the result doesn't
-    __m128i hasWrapped = _mm_andnot_si128(inpSignDiffer_MSB, resSignDiffer_MSB);
-    hasWrapped = _mm_srai_epi32(hasWrapped, 31);
+    __m128i shouldDecrease = _mm_srai_epi32(b, 31); // `blendv` prevents the need for this
+    __m128i hasWrapped = _mm_xor_si128(_mm_cmpgt_epi32(a, sum), shouldDecrease);
 
     // INT_MAX: 0b01..11, INT_MIN: 0b10..00
     __m128i clampedValue = _mm_add_epi32(
         _mm_set1_epi32(INT32_MAX), _mm_srli_epi32(a, 31)
     );
 
-    // For SSE4.1, use `blendv_ps` and remove second line for hasWrapped
     return _either_i128(clampedValue, sum, hasWrapped);
 }
 
@@ -197,20 +192,14 @@ __m128i _addSat_i32x4(__m128i a, __m128i b) {
 __m128i _subSat_i32x4(__m128i minuend, __m128i subtrahend) {
     __m128i difference = _mm_sub_epi32(minuend, subtrahend);
 
-    // Magnitude increases when signs differ (pos - neg = pos + pos)
-    __m128i shouldIncrMagnitude_MSB = _mm_xor_si128(minuend, subtrahend);
-    __m128i subChangedSign_MSB = _mm_xor_si128(difference, minuend);
-
-    // Must have wrapped when a increase in magnitude caused a sign change
-    __m128i hasWrapped = _mm_and_si128(shouldIncrMagnitude_MSB, subChangedSign_MSB);
-    hasWrapped = _mm_srai_epi32(hasWrapped, 31);
+    __m128i shouldDecrease = _mm_cmpgt_epi32(subtrahend, _mm_setzero_si128());
+    __m128i hasWrapped = _mm_xor_si128(_mm_cmpgt_epi32(minuend, difference), shouldDecrease);
 
     // INT_MAX: 0b01..11, INT_MIN: 0b10..00
     __m128i clampedValue = _mm_add_epi32(
         _mm_set1_epi32(INT32_MAX), _mm_srli_epi32(minuend, 31)
     );
 
-    // For SSE4.1, use `blendv_ps` and remove second line for hasWrapped
     return _either_i128(clampedValue, difference, hasWrapped);
 }
 
