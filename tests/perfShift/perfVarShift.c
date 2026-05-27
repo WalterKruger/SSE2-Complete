@@ -74,13 +74,13 @@ int main() {
     
     printf("\n\nVariable 8-bit LEFT shifts: Time taken to calculate %zu results...\n", iterations);
     PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
-        scalar_8, powOf2BitByBit_8, directBitByBit_8, directBitByBitA_8, 
+        scalar_8, powOf2BitByBit_8, powOf2BitByBitA_8, directBitByBit_8, directBitByBitA_8, 
         repeatedDouble_8, powOf2Float_8
     );
     
     printf("\n8-bit RIGHT shifts: Time taken to calculate %zu results...\n", iterations);
     PERF_MESSURE_GROUP(perfMessure2int, iterations, rand_ints,
-        scalarR_8, directBitByBitR_8, directBitByBitAR_8,
+        scalarR_8, directBitByBitR_8, directBitByBitAR_8, directBitByBitBR_8,
         repeatedHalfR_8, repeatedHalfAR_8
     );
 

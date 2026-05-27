@@ -26,14 +26,13 @@
 ))
 
 
-// ((x + (1ULL << 7)) >> amount) - ((1ULL << 7) >> amount);
+// ((x >> amt) | SIGN_MASK) + ((x >> amt) & MSB_MASK)
 
 // Shift 8-bit integers right by immediate while shifting in sign bits
-#define _signShiftR_i8x16(toShift, amount) (\
-    _mm_sub_epi8(\
-        _shiftR_u8x16( _mm_add_epi8(toShift, _mm_set1_epi8(1<<7)), amount ), \
-        _shiftR_u8x16( _mm_set1_epi8(1<<7), amount)\
-    ) )
+#define _signShiftR_i8x16(toShift, amount) _mm_add_epi8(\
+    _mm_or_si128(    _mm_srli_epi32(toShift, amount), _mm_set1_epi8(-(0x80 >> amount))),\
+    _mm_andnot_si128(_mm_srli_epi32(toShift, amount), _mm_set1_epi8(0x80 >> amount))\
+)
 
 
 // Shifts each 8-bit element left by the amount in the corresponding vector, well shifting in zeros (modulo the element size)
@@ -62,20 +61,18 @@ __m128i _shiftRvar_u8x16(__m128i toShift, __m128i amount) {
     // Element size doesn't matter
     amount = _mm_slli_epi16(amount, 8-3);
 
-    toShift = _either_i128(_shiftR_u8x16(toShift,1<<2), toShift, _fillWithMSB_i8x16(amount));
+    __m128i shiftBy4 = _fillWithMSB_i8x16(amount);
+    toShift = _mm_max_epu8(_shiftR_u8x16(toShift, 1<<2), _mm_andnot_si128(shiftBy4, toShift));
     amount = _mm_add_epi8(amount,amount);
 
-    toShift = _either_i128(_shiftR_u8x16(toShift,1<<1), toShift, _fillWithMSB_i8x16(amount));
+    __m128i shiftBy2 = _fillWithMSB_i8x16(amount);
+    toShift = _mm_max_epu8(_shiftR_u8x16(toShift, 1<<1), _mm_andnot_si128(shiftBy2, toShift));
     amount = _mm_add_epi8(amount,amount);
 
-    #if 0
-    toShift = _either_i128(_shiftR_u8x16(toShift,1<<0), toShift, _fillWithMSB_i8x16(amount));
-    #else
     // avg(a,b): (a + b + 1) >> 1
     __m128i ceilDiv2 = _mm_avg_epu8(toShift, _mm_setzero_si128());
     // x - ceil(x/2) = x>>1
     toShift = _mm_sub_epi8(toShift, _mm_and_si128(ceilDiv2, _fillWithMSB_i8x16(amount)));
-    #endif
 
     return toShift;
 }
@@ -181,14 +178,13 @@ __m128i _shiftRvar_u32x4(__m128i u32ToShift, __m128i amount) {
 
 // ====== 64-bit ======
 
-// ((x + (1ULL << 63)) >> amount) - ((1ULL << 63) >> amount);
+// ((x >> amt) | SIGN_MASK) + (~(x >> amt) & MSB_MASK)
 
 // Shift 64-bit integers right by immediate while shifting in sign bits
-#define _signShiftR_i64x2(toShift, amount) (\
-    _mm_sub_epi64(\
-        _mm_srli_epi64( _mm_add_epi64(toShift, _mm_set1_epi64x(1Ull<<63)), amount ), \
-        _mm_srli_epi64( _mm_set1_epi64x(1Ull<<63), amount)\
-    ) )
+#define _signShiftR_i64x2(toShift, amount) _mm_add_epi64(\
+    _mm_or_si128(    _mm_srli_epi64(toShift, amount), _mm_set1_epi64x(-(1ull >> amount))),\
+    _mm_andnot_si128(_mm_srli_epi64(toShift, amount), _mm_set1_epi64x(1ull >> amount))\
+)
 
 // Shifts each 64-bit element left by the amount in the corresponding vector, well shifting in zeros (modulo the element size)
 __m128i _shiftLvar_u64x2(__m128i toShift, __m128i amount) {

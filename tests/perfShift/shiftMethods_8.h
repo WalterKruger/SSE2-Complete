@@ -58,6 +58,42 @@ NOINLINE __m128i powOf2BitByBit_8(__m128i toShift, __m128i amount) {
     return _mulLo_u8x16(toShift, powOf2);
 }
 
+NOINLINE __m128i powOf2BitByBitA_8(__m128i toShift, __m128i amount) {
+
+    #if 1
+    __m128i powOf2 = _mm_set1_epi8(1);
+
+    // Shift size doesn't matter as no set bits cross the lane
+    #define ISBITSET_8(x, i) _mm_cmplt_epi8( _mm_slli_epi16(x, 7 - (i)), _mm_setzero_si128() )
+
+    powOf2 = _mm_add_epi8(powOf2, _mm_and_si128(amount, powOf2));
+
+    powOf2 = _mm_add_epi8(powOf2, _mm_and_si128(powOf2, ISBITSET_8(amount, 1)));
+    powOf2 = _mm_add_epi8(powOf2, _mm_and_si128(powOf2, ISBITSET_8(amount, 1)));
+    //powOf2 = _mm_min_epu8(_mm_slli_epi32(powOf2, 2), _mm_or_si128(powOf2, ISBITSET_8(amount, 1)));
+
+    //powOf2 = _either_i128(_mm_slli_epi16(powOf2, 1<<2), powOf2, ISBITSET_8(amount, 2));
+    powOf2 = _mm_min_epu8(_mm_slli_epi32(powOf2, 4), _mm_or_si128(powOf2, ISBITSET_8(amount, 2)));
+    #else
+
+    // 0b-----x--
+    __m128i powOf2 = _mm_max_epu8(
+        _mm_set1_epi8(1),
+        _mm_and_si128(_mm_slli_epi32(amount, 2), _mm_set1_epi8(1<<4))
+    );
+
+    __m128i condInMSB = _mm_slli_epi32(amount, 6);
+    powOf2 = _mm_add_epi8(powOf2, _mm_and_si128(powOf2, _fillWithMSB_i8x16(condInMSB)));
+    powOf2 = _mm_add_epi8(powOf2, _mm_and_si128(powOf2, _fillWithMSB_i8x16(condInMSB)));
+
+    condInMSB = _mm_add_epi8(condInMSB, condInMSB);
+    powOf2 = _mm_add_epi8(powOf2, _mm_and_si128(powOf2, _fillWithMSB_i8x16(condInMSB)));
+
+    #endif
+
+    return _mulLo_u8x16(toShift, powOf2);
+}
+
 NOINLINE __m128i directBitByBit_8(__m128i toShift, __m128i amount) {
 
 
@@ -192,7 +228,7 @@ NOINLINE __m128i directBitByBitAR_8(__m128i toShift, __m128i amount) {
     toShift = _either_i128(_shiftR_u8x16(toShift,1<<2), toShift, _fillWithMSB_i8x16(amount));
     amount = _mm_add_epi8(amount,amount);
 
-    __asm__ volatile("" : "+x" (shiftBy2_2ndMSB));
+    _GNUC_ONLY(__asm__ volatile("" : "+x" (shiftBy2_2ndMSB)));
 
     // avg(a,b): (a + b + 1) >> 1
     // x - ceil(x/2) = x>>1
@@ -207,6 +243,27 @@ NOINLINE __m128i directBitByBitAR_8(__m128i toShift, __m128i amount) {
     toShift = _mm_add_epi8(toShift, shiftBy2_2ndMSB); // Shifting added two MSBs
 
     #endif
+    amount = _mm_add_epi8(amount,amount);
+
+    __m128i ceilDiv2 = _mm_avg_epu8(toShift, _mm_setzero_si128());
+    toShift = _mm_sub_epi8(toShift, _mm_and_si128(ceilDiv2, _fillWithMSB_i8x16(amount)));
+
+    return toShift;
+}
+
+NOINLINE __m128i directBitByBitBR_8(__m128i toShift, __m128i amount) {
+
+    // Element size doesn't matter
+    amount = _mm_slli_epi16(amount, 8-3);
+
+    __m128i shiftBy4 = _fillWithMSB_i8x16(amount);
+    toShift = _mm_max_epu8(_mm_andnot_si128(shiftBy4, toShift), _shiftR_u8x16(toShift, 1<<2));
+
+    amount = _mm_add_epi8(amount,amount);
+
+    __m128i shiftBy2 = _fillWithMSB_i8x16(amount);
+    toShift = _mm_max_epu8(_mm_andnot_si128(shiftBy2, toShift), _shiftR_u8x16(toShift, 1<<1));
+
     amount = _mm_add_epi8(amount,amount);
 
     __m128i ceilDiv2 = _mm_avg_epu8(toShift, _mm_setzero_si128());

@@ -122,20 +122,27 @@ UNUSED static void _groupPerfMessure_func(
     genericFunc_t funcList[], char *funcsAsStr, size_t funcCount, _messure2Ints_t messureFunc, size_t iterations, void* randValues
 ) {
 
-    funcsAsStr = strtok(funcsAsStr, ", ");
+    char *context = NULL;
+    funcsAsStr = strtok_s(funcsAsStr, ", ", &context);
 
     for (size_t i=0; i < funcCount; i++) {
         messureFunc(funcList[i], iterations, funcsAsStr, randValues);
-        funcsAsStr = strtok(NULL, ", ");
+        funcsAsStr = strtok_s(NULL, ", ", &context);
     }
 }
 
 // Allow macros to expand first
 #define STRVAR(...) #__VA_ARGS__
 
+#ifdef GNUC_EXTENTION
+    #define VAR_TYPE(x) static __typeof__(x)
+#else
+    #define VAR_TYPE(x) auto // MSVC workaround...
+#endif
+
 #define PERF_MESSURE_GROUP(messureFunction, iterations, randValues, func1, ...) do {\
     char funcListStr[] = STRVAR(func1, __VA_ARGS__);\
-    static __typeof__(func1) *funcList[] = {func1, __VA_ARGS__};\
+    VAR_TYPE(func1) *funcList[] = {func1, __VA_ARGS__};\
     \
-    _groupPerfMessure_func((genericFunc_t*)funcList, funcListStr, sizeof(funcList)/sizeof(void*), messureFunction, iterations, randValues);\
+    _groupPerfMessure_func((genericFunc_t*)funcList, funcListStr, sizeof(funcList)/sizeof(char*), messureFunction, iterations, randValues);\
 } while (0)
